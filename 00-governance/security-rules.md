@@ -55,7 +55,7 @@ const user = await userRepository.findOne({ where: { id: userId } });
 ### A04 — Insecure Design
 
 - Every HU that exposes user data must undergo privacy review
-- Bulk query endpoints have mandatory pagination (maximum [100] records per page)
+- Bulk query endpoints have mandatory pagination (maximum 100 records per page)
 - Do not expose sequential internal IDs; use UUIDs
 
 ### A05 — Security Misconfiguration
@@ -83,9 +83,9 @@ const user = await userRepository.findOne({ where: { id: userId } });
 ### A07 — Identification and Authentication Failures
 
 - JWT with maximum expiration of **1 hour** for access tokens
-- Refresh tokens with expiration of **[7 days / 30 days]** and rotation on each use
-- Rate limiting on `/auth/login`: maximum [10] attempts per IP in 5 minutes
-- Account lockout after [5] consecutive failed attempts
+- Refresh tokens with expiration of **7 days** and rotation on each use
+- Rate limiting on `/auth/login`: maximum **10 attempts per IP in 5 minutes**
+- Account lockout after **5 consecutive failed attempts**
 
 ### A08 — Software and Data Integrity Failures
 
@@ -99,7 +99,7 @@ const user = await userRepository.findOne({ where: { id: userId } });
 - Log delete operations with who, when, and what was deleted
 - Security logs are retained for a minimum of **90 days**
 - Automatic alerts configured for:
-  - More than [50] 401/403 errors in 5 minutes
+  - More than **50 401/403 errors in 5 minutes**
   - Access to a resource from an unexpected country (if applicable)
 
 ### A10 — Server-Side Request Forgery (SSRF)
@@ -116,7 +116,7 @@ const user = await userRepository.findOne({ where: { id: userId } });
 const CreateUserSchema = z.object({
   email: z.string().email().max(255),
   name: z.string().min(1).max(100).trim(),
-  role: z.enum(['ADMIN', 'USER', 'VIEWER']),
+  role: z.enum(['ADMINISTRATOR', 'BOARD', 'PERSON', 'MAINTENANCE_STAFF', 'SECURITY_GUARD']),
 });
 
 // The result is typed and sanitized

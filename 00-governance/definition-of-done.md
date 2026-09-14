@@ -21,7 +21,7 @@
 - [ ] Changes do not break other services (integration tests pass)
 - [ ] If API changes: OpenAPI contract updated in `07-api/contracts/`
 - [ ] If data model changes: service `data-model.md` updated
-- [ ] If new/modified events: `event-catalog.md` updated
+- [ ] If new/modified events: service `events.md` or `02-domain/domain-events.md` updated
 
 ### Deployment
 - [ ] Code is mergeable to `dev` (no conflicts)
@@ -47,4 +47,4 @@ The following exceptions must be explicitly agreed to by the Tech Lead:
 
 - "The code is on my machine" — it must be in the repository
 - "It works on my local environment" — it must work on staging
-- "The PM/PO approved it" — that is the product Definition of Done, not the code's
+- "The PM/PO approved it" — that is the product Definition of Done, not the code'
