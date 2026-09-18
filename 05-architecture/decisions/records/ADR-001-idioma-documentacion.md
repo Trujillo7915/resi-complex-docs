@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | **ID** | ADR-001 |
-| **Date** | 2024-01-10 |
+| **Date** | 2026-08-28 |
 | **Status** | Accepted |
-| **Authors** | María García — Tech Lead |
-| **Reviewers** | Carlos Méndez, Sofía Torres, Andrés Ruiz — Development team |
+| **Authors** | Fabian Trujillo — Project leader |
+| **Reviewers** | Alexandra, Félix, Fabián, Julián — Development team |
 
 ---
 
@@ -80,3 +80,4 @@ and implementation.
 
 - Team documentation conventions → `00-governance/documentation-rules.md`
 - Domain term glossary → `01-context/glossary.md`
+

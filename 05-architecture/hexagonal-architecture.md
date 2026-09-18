@@ -1,16 +1,21 @@
-# Hexagonal Architecture (Ports & Adapters)
+# Hexagonal Architecture (Ports & Adapters) — resi-complex
 
 > Hexagonal architecture, proposed by Alistair Cockburn, organizes a service so that the
 > **business domain is completely independent** of the surrounding technology.
 > The database, the web framework, the message broker — all are interchangeable details.
 > What matters is the business logic, which lives at the center.
 
-> **Stack note:** The concepts in this document are valid for any language.
-> The code examples and folder structure specific to your technology are in:
-> - Node.js + TypeScript → [`_stacks/node-typescript.md`](../_stacks/node-typescript.md)
-> - Java + Spring Boot → [`_stacks/java-spring.md`](../_stacks/java-spring.md)
-> - Python + FastAPI → [`_stacks/python-fastapi.md`](../_stacks/python-fastapi.md)
-> - Go → [`_stacks/go.md`](../_stacks/go.md)
+> **Stack note:** resi-complex's stack is **locked** to Java 17+ / Spring Boot 3.x
+> (`01-context/overview.md`, `01-context/_template-project-profile.md`). This document therefore
+> uses Java exclusively — unlike the scaffold's original generic version, it is not a
+> multi-stack reference. For the concrete Maven/Gradle folder layout, dependencies, and naming
+> conventions, see [`_stacks/java-spring.md`](../_stacks/java-spring.md).
+
+> **Domain note:** all examples below use the real `MaintenanceRequest` aggregate from
+> `02-domain/entities-and-rules.md` (Maintenance bounded context, `maintenance-service`),
+> including its actual invariants INV-001, INV-002, and INV-003 — not a placeholder domain.
+> The same structure applies identically to `AdministrationFee` (`billing-service`),
+> `Correspondence` (`access-control-service`), and every other aggregate in the system.
 
 ---
 
@@ -35,93 +40,102 @@ you need to simulate the database.
 ```
 ✓ Hexagonal Architecture:
 
-  [HTTP Controller]  [CLI]  [Test]  ← Primary Adapters (enter the hexagon)
-          │            │      │
-          └────────────┴──────┘
+  [HTTP Controller]  [Kafka Consumer]  [Test]  ← Primary Adapters (enter the hexagon)
+          │                 │            │
+          └─────────────────┴────────────┘
                        │
                  [Driving Port]  ← Interface that defines the domain's API
                        │
                ┌───────────────┐
                │               │
                │    DOMAIN     │  ← Pure business logic, no external dependencies
-               │               │
+               │  (Maintenance │
+               │   Request)    │
                └───────────────┘
                        │
                  [Driven Port]  ← Interface the domain needs from the outside world
                        │
           ┌────────────┴──────┐
           │                   │
-  [DB Adapter]  [Kafka Adapter]  ← Secondary Adapters (exit the hexagon)
+  [JPA Repository]  [Event Publisher]  ← Secondary Adapters (exit the hexagon)
 ```
 
 ---
 
-## Folder structure
+## Folder structure (`maintenance-service`, per `_stacks/java-spring.md`)
 
 ```
-src/
-├── domain/                          # The hexagon — no frameworks, no external dependencies
-│   ├── [aggregate]/
-│   │   ├── [Aggregate].ts           # Aggregate Root with invariants
-│   │   ├── [Aggregate]Id.ts         # Value Object for the ID
-│   │   ├── events/
-│   │   │   └── [EventOccurred].ts   # Domain events
-│   │   ├── services/
-│   │   │   └── [DomainService].ts   # Logic that does not belong to any entity
-│   │   └── ports/                   # Interfaces (ports) — abstract contracts
-│   │       ├── in/
-│   │       │   └── [UseCasePort].ts # Driving port: use case contract
-│   │       └── out/
-│   │           └── [RepoPort].ts    # Driven port: repository contract
-│   └── shared/
-│       └── value-objects/           # VOs shared between aggregates
-│           ├── Email.ts
-│           └── Money.ts
-│
-├── application/                     # Use cases — orchestrate the domain
-│   └── [aggregate]/
-│       ├── [CreateXxxUseCase].ts    # Implements the driving port
-│       └── dtos/
-│           ├── [CreateXxxRequest].ts
-│           └── [CreateXxxResponse].ts
-│
-├── infrastructure/                  # Everything external to the hexagon
-│   ├── adapters/
-│   │   ├── in/                      # Primary adapters — receive external calls
-│   │   │   ├── http/
-│   │   │   │   ├── [XxxController].ts
-│   │   │   │   └── [XxxRouter].ts
-│   │   │   └── messaging/
-│   │   │       └── [XxxEventConsumer].ts
-│   │   └── out/                     # Secondary adapters — call the outside
-│   │       ├── persistence/
-│   │       │   └── [XxxRepositoryImpl].ts   # Implements the driven port
-│   │       ├── messaging/
-│   │       │   └── [XxxEventPublisher].ts
-│   │       └── external/
-│   │           └── [ExternalApiAdapter].ts
-│   └── config/
-│       ├── database.ts
-│       └── container.ts             # Dependency injection (IoC)
-│
-└── main.ts                          # Bootstrap — connects adapters with ports
+maintenance-service/
+└── src/
+    └── main/
+        └── java/com/resicomplex/maintenance/
+            ├── domain/                              # No Spring dependencies — pure POJOs
+            │   ├── model/
+            │   │   ├── MaintenanceRequest.java       # Aggregate Root — owns INV-001..INV-003
+            │   │   ├── RequestStatus.java             # Enum: PENDING/ASSIGNED/IN_PROGRESS/RESOLVED
+            │   │   └── Priority.java                  # Enum: LOW/MEDIUM/HIGH/URGENT
+            │   ├── event/
+            │   │   ├── MaintenanceRequestCreated.java
+            │   │   └── MaintenanceRequestStatusUpdated.java
+            │   └── port/
+            │       ├── in/
+            │       │   ├── CreateMaintenanceRequestUseCase.java
+            │       │   └── AssignMaintenanceRequestUseCase.java
+            │       └── out/
+            │           ├── MaintenanceRequestRepository.java
+            │           └── EventPublisher.java
+            │
+            ├── application/                          # Orchestrates — uses Spring for DI, not web
+            │   └── usecase/
+            │       ├── CreateMaintenanceRequestService.java
+            │       └── AssignMaintenanceRequestService.java
+            │
+            └── infrastructure/                        # Adapters — Spring Web, JPA, broker client
+                ├── web/                                # Primary adapter: REST
+                │   ├── MaintenanceRequestController.java
+                │   └── dto/
+                │       ├── CreateMaintenanceRequestRequest.java
+                │       └── MaintenanceRequestResponse.java
+                ├── persistence/                         # Secondary adapter: JPA (MySQL)
+                │   ├── JpaMaintenanceRequestRepository.java   # implements MaintenanceRequestRepository
+                │   └── entity/
+                │       └── MaintenanceRequestJpaEntity.java   # @Entity — separate from domain model
+                ├── messaging/                            # Secondary adapter: broker client (AT-002 pending)
+                │   └── MaintenanceEventPublisher.java        # implements EventPublisher
+                └── config/
+                    └── AppConfig.java                        # Spring @Configuration — dependency wiring
 ```
+
+**Dependency rule:** `domain/` does not import anything from `org.springframework.*` or
+`jakarta.persistence.*`. POJOs only — exactly as `_stacks/java-spring.md` mandates project-wide.
 
 ---
 
 ## The Ports
 
-Ports are **interfaces** (abstract contracts). The domain defines them;
-adapters implement them.
+Ports are **interfaces** (abstract contracts). The domain defines them; adapters implement them.
 
 ### Driving Port (Input Port)
 
 Defines what the domain can do — its public API from the outside's perspective.
 
-```typescript
-// src/domain/order/ports/in/CreateOrderPort.ts
-export interface CreateOrderPort {
-  execute(request: CreateOrderRequest): Promise<CreateOrderResponse>;
+```java
+// domain/port/in/CreateMaintenanceRequestUseCase.java
+package com.resicomplex.maintenance.domain.port.in;
+
+import com.resicomplex.maintenance.domain.model.Priority;
+
+public interface CreateMaintenanceRequestUseCase {
+
+    record CreateMaintenanceRequestCommand(
+        String personId,
+        String unitId,
+        String type,
+        String description,
+        Priority priority
+    ) {}
+
+    String execute(CreateMaintenanceRequestCommand command); // returns the created request's id
 }
 ```
 
@@ -129,19 +143,128 @@ export interface CreateOrderPort {
 
 Defines what the domain needs from the outside world — without knowing how it is implemented.
 
-```typescript
-// src/domain/order/ports/out/OrderRepositoryPort.ts
-export interface OrderRepositoryPort {
-  save(order: Order): Promise<void>;
-  findById(id: OrderId): Promise<Order | null>;
-  findByCustomer(customerId: CustomerId): Promise<Order[]>;
-}
+```java
+// domain/port/out/MaintenanceRequestRepository.java
+package com.resicomplex.maintenance.domain.port.out;
 
-// src/domain/order/ports/out/EventPublisherPort.ts
-export interface EventPublisherPort {
-  publish(event: DomainEvent): Promise<void>;
+import com.resicomplex.maintenance.domain.model.MaintenanceRequest;
+import java.util.Optional;
+
+public interface MaintenanceRequestRepository {
+    void save(MaintenanceRequest request);
+    Optional<MaintenanceRequest> findById(String id);
 }
 ```
+
+```java
+// domain/port/out/EventPublisher.java
+package com.resicomplex.maintenance.domain.port.out;
+
+import com.resicomplex.maintenance.domain.event.DomainEvent;
+
+public interface EventPublisher {
+    void publish(DomainEvent event);
+}
+```
+
+---
+
+## The Domain — Aggregate Root with real invariants
+
+This is the actual business logic from `02-domain/entities-and-rules.md` — nothing simplified.
+
+```java
+// domain/model/MaintenanceRequest.java
+package com.resicomplex.maintenance.domain.model;
+
+import com.resicomplex.maintenance.domain.event.DomainEvent;
+import com.resicomplex.maintenance.domain.event.MaintenanceRequestCreated;
+import com.resicomplex.maintenance.domain.event.MaintenanceRequestStatusUpdated;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+public class MaintenanceRequest {
+
+    private final String id;
+    private final String personId;
+    private final String unitId;
+    private final String type;
+    private final String description;
+    private final Priority priority;
+    private String assignedTo;
+    private RequestStatus status;
+    private final List<DomainEvent> domainEvents = new ArrayList<>();
+
+    private MaintenanceRequest(String id, String personId, String unitId, String type,
+                                String description, Priority priority) {
+        this.id = id;
+        this.personId = personId;
+        this.unitId = unitId;
+        this.type = type;
+        this.description = description;
+        this.priority = priority;
+        this.status = RequestStatus.PENDING;
+    }
+
+    // Factory method — enforces INV-001 and INV-003 at creation time
+    public static MaintenanceRequest create(String personId, String unitId, String type,
+                                             String description, Priority priority) {
+        if (personId == null || personId.isBlank() || unitId == null || unitId.isBlank()) {
+            throw new DomainException("INV-001: personId and unitId are required");
+        }
+        if (priority == null) {
+            throw new DomainException("INV-003: priority is required on creation");
+        }
+        MaintenanceRequest request = new MaintenanceRequest(
+            UUID.randomUUID().toString(), personId, unitId, type, description, priority
+        );
+        request.domainEvents.add(new MaintenanceRequestCreated(request.id, personId, unitId,
+            type, description, priority, RequestStatus.PENDING));
+        return request;
+    }
+
+    // Enforces INV-002 — status can only move forward, never backward
+    public void assign(String staffId) {
+        if (this.status != RequestStatus.PENDING) {
+            throw new DomainException("INV-002: only a PENDING request can be assigned");
+        }
+        this.assignedTo = staffId;
+        this.status = RequestStatus.ASSIGNED;
+        this.domainEvents.add(new MaintenanceRequestStatusUpdated(this.id, this.status));
+    }
+
+    public void start() {
+        if (this.status != RequestStatus.ASSIGNED) {
+            throw new DomainException("INV-002: only an ASSIGNED request can move to IN_PROGRESS");
+        }
+        this.status = RequestStatus.IN_PROGRESS;
+        this.domainEvents.add(new MaintenanceRequestStatusUpdated(this.id, this.status));
+    }
+
+    public void resolve() {
+        if (this.status != RequestStatus.IN_PROGRESS) {
+            throw new DomainException("INV-002: only an IN_PROGRESS request can be RESOLVED");
+        }
+        this.status = RequestStatus.RESOLVED;
+        this.domainEvents.add(new MaintenanceRequestStatusUpdated(this.id, this.status));
+    }
+
+    public List<DomainEvent> domainEvents() {
+        return List.copyOf(domainEvents);
+    }
+
+    public void clearEvents() {
+        domainEvents.clear();
+    }
+
+    // Getters omitted for brevity — no setters: state changes only through the methods above
+}
+```
+
+Notice: **zero Spring annotations, zero JPA, zero imports outside the JDK.** This class can be
+unit tested in milliseconds with no Spring context, no database, and no HTTP server.
 
 ---
 
@@ -149,55 +272,83 @@ export interface EventPublisherPort {
 
 ### Primary Adapter — HTTP Controller
 
-The HTTP controller translates the HTTP request to the domain use case.
+Translates the HTTP request to the domain use case. It contains no business logic.
 
-```typescript
-// src/infrastructure/adapters/in/http/OrderController.ts
-import { CreateOrderPort } from '@domain/order/ports/in/CreateOrderPort';
+```java
+// infrastructure/web/MaintenanceRequestController.java
+package com.resicomplex.maintenance.infrastructure.web;
 
-@Controller('/orders')
-export class OrderController {
-  constructor(
+import com.resicomplex.maintenance.domain.port.in.CreateMaintenanceRequestUseCase;
+import com.resicomplex.maintenance.infrastructure.web.dto.CreateMaintenanceRequestRequest;
+import com.resicomplex.maintenance.infrastructure.web.dto.MaintenanceRequestResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/maintenance-requests")
+public class MaintenanceRequestController {
+
     // Inject the port, NOT the concrete implementation
-    private readonly createOrder: CreateOrderPort,
-  ) {}
+    private final CreateMaintenanceRequestUseCase createMaintenanceRequest;
 
-  @Post('/')
-  async create(@Body() body: CreateOrderHttpRequest): Promise<void> {
-    // Translate HTTP request → domain DTO
-    const request = new CreateOrderRequest(body.customerId, body.items);
-    // Call the use case through the port
-    const response = await this.createOrder.execute(request);
-    return response;
-  }
+    public MaintenanceRequestController(CreateMaintenanceRequestUseCase createMaintenanceRequest) {
+        this.createMaintenanceRequest = createMaintenanceRequest;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public MaintenanceRequestResponse create(@RequestBody CreateMaintenanceRequestRequest body) {
+        // Translate HTTP DTO → domain command
+        var command = new CreateMaintenanceRequestUseCase.CreateMaintenanceRequestCommand(
+            body.personId(), body.unitId(), body.type(), body.description(), body.priority()
+        );
+        String id = createMaintenanceRequest.execute(command);
+        return new MaintenanceRequestResponse(id);
+    }
 }
 ```
 
-### Secondary Adapter — Repository
+> Note (P5, `overview.md` §5): a real controller in resi-complex must also enforce
+> **ownership-level authorization** here or in a shared interceptor — e.g. a Person can only
+> read requests they created (`requests:read:own`), and Maintenance Staff can only update
+> requests assigned to them (`requests:update:assigned`), per `01-context/glossary.md`.
 
-The repository implements the driven port. The domain does not know PostgreSQL exists.
+### Secondary Adapter — JPA Repository
 
-```typescript
-// src/infrastructure/adapters/out/persistence/OrderRepositoryImpl.ts
-import { OrderRepositoryPort } from '@domain/order/ports/out/OrderRepositoryPort';
+Implements the driven port. The domain does not know MySQL or JPA exist.
 
-export class OrderRepositoryImpl implements OrderRepositoryPort {
-  constructor(private readonly db: DatabaseConnection) {}
+```java
+// infrastructure/persistence/JpaMaintenanceRequestRepository.java
+package com.resicomplex.maintenance.infrastructure.persistence;
 
-  async save(order: Order): Promise<void> {
-    // Translate Aggregate → database row
-    await this.db.query(
-      'INSERT INTO orders (id, customer_id, status, total) VALUES ($1, $2, $3, $4)',
-      [order.id.value, order.customerId.value, order.status, order.total.amount],
-    );
-  }
+import com.resicomplex.maintenance.domain.model.MaintenanceRequest;
+import com.resicomplex.maintenance.domain.port.out.MaintenanceRequestRepository;
+import com.resicomplex.maintenance.infrastructure.persistence.entity.MaintenanceRequestJpaEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
-  async findById(id: OrderId): Promise<Order | null> {
-    const row = await this.db.queryOne('SELECT * FROM orders WHERE id = $1', [id.value]);
-    if (!row) return null;
-    // Translate database row → Aggregate
-    return OrderMapper.toDomain(row);
-  }
+import java.util.Optional;
+
+@Repository
+public class JpaMaintenanceRequestRepository implements MaintenanceRequestRepository {
+
+    interface SpringDataJpaRepository extends JpaRepository<MaintenanceRequestJpaEntity, String> {}
+
+    private final SpringDataJpaRepository jpa;
+
+    public JpaMaintenanceRequestRepository(SpringDataJpaRepository jpa) {
+        this.jpa = jpa;
+    }
+
+    @Override
+    public void save(MaintenanceRequest request) {
+        jpa.save(MaintenanceRequestMapper.toJpaEntity(request)); // Mapper lives in infrastructure/, not domain/
+    }
+
+    @Override
+    public Optional<MaintenanceRequest> findById(String id) {
+        return jpa.findById(id).map(MaintenanceRequestMapper::toDomain);
+    }
 }
 ```
 
@@ -205,34 +356,48 @@ export class OrderRepositoryImpl implements OrderRepositoryPort {
 
 ## The Use Case (Application Service)
 
-The use case orchestrates the domain. It uses driving and driven ports. It contains no business logic — that lives in the Aggregate.
+Orchestrates the domain. Uses driving and driven ports. Contains **no** business logic —
+that lives in the Aggregate.
 
-```typescript
-// src/application/order/CreateOrderUseCase.ts
-import { CreateOrderPort } from '@domain/order/ports/in/CreateOrderPort';
-import { OrderRepositoryPort } from '@domain/order/ports/out/OrderRepositoryPort';
-import { EventPublisherPort } from '@domain/order/ports/out/EventPublisherPort';
+```java
+// application/usecase/CreateMaintenanceRequestService.java
+package com.resicomplex.maintenance.application.usecase;
 
-export class CreateOrderUseCase implements CreateOrderPort {
-  constructor(
-    private readonly orderRepo: OrderRepositoryPort,
-    private readonly eventPublisher: EventPublisherPort,
-  ) {}
+import com.resicomplex.maintenance.domain.model.MaintenanceRequest;
+import com.resicomplex.maintenance.domain.port.in.CreateMaintenanceRequestUseCase;
+import com.resicomplex.maintenance.domain.port.out.EventPublisher;
+import com.resicomplex.maintenance.domain.port.out.MaintenanceRequestRepository;
+import org.springframework.stereotype.Service;
 
-  async execute(request: CreateOrderRequest): Promise<CreateOrderResponse> {
-    // 1. Create the aggregate (business logic lives HERE, in the domain)
-    const order = Order.create(request.customerId, request.items);
+@Service // Spring manages the lifecycle; the interface itself belongs to the domain
+public class CreateMaintenanceRequestService implements CreateMaintenanceRequestUseCase {
 
-    // 2. Persist (through the port — the use case does not know which DB is used)
-    await this.orderRepo.save(order);
+    private final MaintenanceRequestRepository repository;
+    private final EventPublisher eventPublisher;
 
-    // 3. Publish domain events (through the port)
-    for (const event of order.domainEvents) {
-      await this.eventPublisher.publish(event);
+    public CreateMaintenanceRequestService(MaintenanceRequestRepository repository,
+                                            EventPublisher eventPublisher) {
+        this.repository = repository;
+        this.eventPublisher = eventPublisher;
     }
 
-    return new CreateOrderResponse(order.id.value);
-  }
+    @Override
+    public String execute(CreateMaintenanceRequestCommand command) {
+        // 1. Create the aggregate (business logic lives HERE, in the domain)
+        MaintenanceRequest request = MaintenanceRequest.create(
+            command.personId(), command.unitId(), command.type(),
+            command.description(), command.priority()
+        );
+
+        // 2. Persist (through the port — the use case does not know which DB is used)
+        repository.save(request);
+
+        // 3. Publish domain events (through the port — broker technology is AT-002, still pending)
+        request.domainEvents().forEach(eventPublisher::publish);
+        request.clearEvents();
+
+        return request.getId();
+    }
 }
 ```
 
@@ -252,84 +417,94 @@ infrastructure/ → application/ → domain/
 
 ### Dependency inversion (DI) in practice
 
-```typescript
+```java
 // ✓ Correct — domain defines the interface, infrastructure implements it
-// In domain/:
-export interface OrderRepositoryPort { ... }
+// In domain/port/out/:
+public interface MaintenanceRequestRepository { ... }
 
-// In infrastructure/:
-export class OrderRepositoryImpl implements OrderRepositoryPort { ... }
+// In infrastructure/persistence/:
+public class JpaMaintenanceRequestRepository implements MaintenanceRequestRepository { ... }
 
-// In the bootstrap (main.ts), the concrete implementation is injected:
-const orderRepo = new OrderRepositoryImpl(dbConnection);
-const createOrderUseCase = new CreateOrderUseCase(orderRepo, eventPublisher);
-const orderController = new OrderController(createOrderUseCase);
+// Spring's IoC container wires the concrete implementation automatically via @Repository/@Service —
+// no manual bootstrap file is needed, unlike frameworks without a DI container.
 ```
 
 ---
 
 ## Advantages for TDD
 
-Hexagonal architecture is ideal for TDD because:
+Hexagonal architecture is ideal for TDD (mandatory per `CONTRIBUTING.md`: "Team rule: User
+Stories are implemented using TDD. No exceptions.") because:
 
-1. **The domain is testable without framework mocks.** You do not need to start a server
-   or a database to test business logic.
+1. **The domain is testable without framework mocks.** `MaintenanceRequest` above needs no
+   Spring context, no database, and no HTTP server to test its invariants.
+2. **Driven ports can be faked easily.** In tests, an in-memory `MaintenanceRequestRepository`
+   replaces the real JPA one.
+3. **Invariants are explicit** (INV-001, INV-002, INV-003) and tested in isolation.
 
-2. **Driven ports can be faked easily.** In tests, you use an
-   in-memory repository (Fake) instead of the real one.
+```java
+// Domain unit test — zero external dependencies, per _stacks/java-spring.md's test layout
+class MaintenanceRequestTest {
 
-3. **Invariants are explicit** and tested in isolation.
+    @Test
+    void rejects_creation_without_priority() {
+        assertThatThrownBy(() ->
+            MaintenanceRequest.create("p1", "u1", "plumbing", "leak", null)
+        ).isInstanceOf(DomainException.class)
+         .hasMessageContaining("INV-003");
+    }
 
-```typescript
-// Domain unit test — zero external dependencies
-describe('Order', () => {
-  it('cannot be created without items', () => {
-    expect(() => Order.create(customerId, [])).toThrow('INV-001');
-  });
+    @Test
+    void cannot_be_assigned_twice() {
+        MaintenanceRequest request = MaintenanceRequest.create("p1", "u1", "plumbing", "leak", Priority.URGENT);
+        request.assign("staff-1");
 
-  it('on confirm changes status to CONFIRMED', () => {
-    const order = Order.create(customerId, [validItem]);
-    order.confirm();
-    expect(order.status).toBe(OrderStatus.CONFIRMED);
-  });
+        assertThatThrownBy(() -> request.assign("staff-2"))
+            .isInstanceOf(DomainException.class)
+            .hasMessageContaining("INV-002");
+    }
+}
 
-  it('on confirm emits OrderConfirmed event', () => {
-    const order = Order.create(customerId, [validItem]);
-    order.confirm();
-    expect(order.domainEvents).toContainEqual(expect.any(OrderConfirmedEvent));
-  });
-});
+// Use case test with a FAKE repository (not a real DB, not @SpringBootTest)
+class CreateMaintenanceRequestServiceTest {
 
-// Use case test with FAKE repository (not a real DB mock)
-describe('CreateOrderUseCase', () => {
-  it('saves the order and publishes the event', async () => {
-    const fakeOrderRepo = new InMemoryOrderRepository();
-    const fakeEventPublisher = new InMemoryEventPublisher();
-    const useCase = new CreateOrderUseCase(fakeOrderRepo, fakeEventPublisher);
+    @Test
+    void saves_the_request_and_publishes_the_event() {
+        var fakeRepo = new InMemoryMaintenanceRequestRepository();
+        var fakePublisher = new InMemoryEventPublisher();
+        var useCase = new CreateMaintenanceRequestService(fakeRepo, fakePublisher);
 
-    await useCase.execute(new CreateOrderRequest(customerId, [validItem]));
+        var command = new CreateMaintenanceRequestUseCase.CreateMaintenanceRequestCommand(
+            "p1", "u1", "plumbing", "Water leak in the main bathroom", Priority.URGENT
+        );
 
-    expect(fakeOrderRepo.orders).toHaveLength(1);
-    expect(fakeEventPublisher.events).toContainEqual(expect.any(OrderCreated));
-  });
-});
+        String id = useCase.execute(command);
+
+        assertThat(fakeRepo.findById(id)).isPresent();
+        assertThat(fakePublisher.published()).hasSize(1);
+    }
+}
 ```
 
-> See full TDD guide in `11-quality/tdd-guide.md`
+> Full TDD flow (Red → Green → Refactor) and test doubles conventions →
+> `11-quality/tdd-guide.md` (not yet created).
 
 ---
 
 ## Hexagonal Architecture Checklist
 
-When reviewing a PR or new service, verify:
+When reviewing a PR for any of the 9 services, verify:
 
 - [ ] `domain/` has no imports from `infrastructure/` or `application/`
-- [ ] `domain/` has no imports from frameworks (Express, NestJS, TypeORM, etc.)
-- [ ] Every repository interface lives in `domain/ports/out/`
-- [ ] Every use case interface lives in `domain/ports/in/`
-- [ ] Mappers (`toDomain` / `toPersistence`) live in `infrastructure/`, not in `domain/`
-- [ ] HTTP API DTOs live in `infrastructure/adapters/in/http/`, not in `domain/`
-- [ ] There is a unit test for each Aggregate invariant
+- [ ] `domain/` has no imports from Spring, JPA, or any other framework
+- [ ] Every repository interface lives in `domain/port/out/`
+- [ ] Every use case interface lives in `domain/port/in/`
+- [ ] Mappers (`toDomain` / `toJpaEntity`) live in `infrastructure/`, not in `domain/`
+- [ ] HTTP request/response DTOs live in `infrastructure/web/dto/`, not in `domain/`
+- [ ] There is a unit test for each Aggregate invariant (see `02-domain/entities-and-rules.md`
+      for the full invariant list per aggregate — every `INV-NNN` and `AGGR-INV-NNN` needs a test)
+- [ ] Ownership-level authorization (P5) is enforced at the controller or a shared interceptor,
+      not left implicit
 
 ---
 
@@ -337,19 +512,22 @@ When reviewing a PR or new service, verify:
 
 | Anti-pattern | Why it is bad | Solution |
 |-------------|--------------|---------|
-| `import { Repository } from 'typeorm'` in the domain | Couples the domain to TypeORM | Define your own port interface |
-| Business logic in the Controller | If you change the endpoint, you change the business | Move to the Aggregate |
-| Repository returning DTOs instead of Aggregates | The domain cannot validate invariants | Use Mapper to reconstruct the Aggregate |
-| Use case with 15 dependencies | It probably does too much | Split into smaller use cases |
-| `any` in port interfaces | You lose the typed contract | Always use explicit typing |
+| `import org.springframework.data.jpa.repository.JpaRepository;` inside `domain/model/` | Couples the domain to Spring Data JPA | Define your own port interface in `domain/port/out/` |
+| Business logic in `MaintenanceRequestController` (e.g. computing whether a transition is valid) | If you change the endpoint, you change the business | Move to `MaintenanceRequest` |
+| `JpaMaintenanceRequestRepository` returning a JPA entity instead of the domain `MaintenanceRequest` | The domain cannot validate invariants against a persistence-shaped object | Use a Mapper to reconstruct the Aggregate |
+| A use case with 10+ constructor dependencies | It probably does too much — split it | Split into smaller, single-responsibility use cases |
+| `Object` or raw `Map<String,Object>` in port interfaces | You lose the typed contract | Always use explicit typing (records, enums, value objects) |
+| Enforcing `requests:read:own` only in the frontend | Any direct API call bypasses it | Enforce at the service layer, per P5 |
 
 ---
 
 ## References and correlations
 
 - Bounded Contexts → `02-domain/domain-map.md`
-- Entities and invariants → `02-domain/entities-and-rules.md`
+- Entities, invariants, and aggregates for every service → `02-domain/entities-and-rules.md`
 - Domain events → `02-domain/domain-events.md`
-- Complementary patterns (CQRS, Event Sourcing, Saga) → `05-architecture/pattern-guide.md`
-- TDD applied to hexagonal architecture → `11-quality/tdd-guide.md`
-- Service template with hexagonal structure → `09-microservices/_template/service/`
+- Stack conventions (Maven, folder layout, naming) → `_stacks/java-spring.md`
+- Complementary patterns (Outbox, Saga, CQRS) → `05-architecture/pattern-guide.md`
+- Service catalog and container diagram → `05-architecture/overview.md`
+- TDD applied to hexagonal architecture → `11-quality/tdd-guide.md` (not yet created)
+- Service template with hexagonal structure → `09-microservices/_template/service/` (not yet created)

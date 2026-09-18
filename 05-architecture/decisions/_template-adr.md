@@ -71,3 +71,4 @@
 
 - [Links to documentation, RFCs, articles that support the decision]
 - Related to: [other ADRs]
+
