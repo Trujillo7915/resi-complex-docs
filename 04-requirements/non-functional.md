@@ -28,8 +28,10 @@
 | Service startup time | < 30 seconds | Cold start |
 
 **Defined critical endpoints:**
-- `POST /[resource]` — [justification for why it is critical]
-- `GET /[resource]/:id` — [justification]
+- `POST /auth/login` (iam-service) — gates access to every other endpoint; a slow login blocks all 5 roles
+- `POST /fees/generate` (billing-service) — monthly batch job that generates fees for every unit at once (FR08–FR09)
+- `POST /maintenance-requests` (maintenance-service) — created in real time by residents/commercial owners reporting an issue (FR05)
+- `POST /visits` (access-control-service) — logged in real time by the Security Guard at the front desk (FR12)
 
 **Load testing tools:**
 - k6, Apache JMeter, Locust, Gatling
@@ -44,6 +46,8 @@
 |------------|-----|-------------------|-------------------|
 | Production | 99.9% | Sundays 2am-4am | 44 minutes |
 | Staging | 95% | No restriction | 36 hours |
+
+> **Current status:** `01-context/scope.md` confirms only the Local environment for this formative delivery — Staging and Production are "not yet planned for the formative scope of this project." The SLOs above are the target once those environments exist; they are not measurable yet.
 
 **Monthly error budget in production:** 44 minutes
 **Error Budget policy:** If > 50% of the error budget is consumed in the first half of the month,
@@ -62,10 +66,10 @@ feature deploys are frozen until the next month and stability is prioritized.
 | Gradual load growth | Horizontal auto-scaling activated when CPU > 70% |
 | Sudden spike (Black Friday, etc.) | System scales in < 2 minutes |
 | Load reduction | Scale-down without interrupting active traffic |
-| Horizontal scaling limit | Up to [N] instances per service |
+| Horizontal scaling limit | Up to 3 instances per service (formative-project scale: a single residential complex, see `01-context/scope.md` assumption #3) |
 
 **Strategy:** Stateless horizontal scaling — each instance does not store state in memory.
-State goes in Redis (sessions, cache) or PostgreSQL (persistent data).
+State goes in Redis (sessions, cache) or MySQL (persistent data).
 
 ---
 
@@ -91,7 +95,7 @@ Code must be reviewed against the OWASP Top 10 on each release.
 Tools: SAST (SonarQube/Snyk), dependency scanning, DAST in staging.
 
 ### Regulatory compliance
-- [GDPR / Habeas Data / PCI-DSS / etc.] — as applicable to the project
+- Ley 1581 de 2012 (Colombian personal data protection / Habeas Data law) — applies because People Management stores residents' and commercial owners/tenants' personal data (`01-context/scope.md`, Constraints; `02-domain/domain-map.md`)
 
 ---
 
@@ -123,7 +127,7 @@ Tools: SAST (SonarQube/Snyk), dependency scanning, DAST in staging.
 ## NFR-007: Portability
 
 - All services are deployed as Docker images
-- Images work in any environment with Kubernetes 1.28+
+- Images work in any environment with a modern container orchestrator (specific platform/version pending — `01-context/overview.md` marks Infrastructure as "Pending definition")
 - No service depends on the host operating system
 - Environment variables are the only source of environment-specific configuration
 
@@ -133,23 +137,22 @@ Tools: SAST (SonarQube/Snyk), dependency scanning, DAST in staging.
 
 | Scenario | RTO (Recovery Time Objective) | RPO (Recovery Point Objective) |
 |---------|------------------------------|-------------------------------|
-| Single service failure | < 2 minutes (K8s restart) | 0 (stateless) |
+| Single service failure | < 2 minutes (orchestrator restart) | 0 (stateless) |
 | Primary database failure | < 5 minutes (failover to replica) | < 1 second (synchronous replication) |
-| Availability zone loss | < 15 minutes | < 5 minutes |
-| Full region disaster | < 4 hours (DR in secondary region) | < 1 hour |
-
+| Availability zone loss | < 15 minutes — *out of scope for this formative delivery, only the Local environment is confirmed (`01-context/scope.md`)* | < 5 minutes |
+| Full region disaster | < 4 hours (DR in secondary region) — *out of scope for this formative delivery* | < 1 hour |
 ---
 
 ## NFR priority matrix
 
 | NFR | Priority (P1/P2/P3) | Validated in CI? | Owner |
 |-----|---------------------|-----------------|-------|
-| Performance | P1 | Yes (k6 in staging) | [Tech Lead] |
-| Availability | P1 | Yes (health checks) | [DevOps] |
-| Security | P1 | Yes (SAST + OWASP) | [Security] |
-| Scalability | P2 | Manual (quarterly) | [DevOps] |
-| Observability | P1 | Yes (smoke test in CI) | [Tech Lead] |
-| Maintainability | P2 | Yes (coverage in CI) | [Team] |
+| Performance | P1 | Not yet — planned (k6 in staging) | Pending — to be assigned by the team |
+| Availability | P1 | Not yet — planned (health checks) | Pending — to be assigned by the team |
+| Security | P1 | Not yet — planned (SAST + OWASP) | Pending — to be assigned by the team |
+| Scalability | P2 | Not yet — manual, quarterly once staging exists | Pending — to be assigned by the team |
+| Observability | P1 | Not yet — planned (smoke test in CI) | Pending — to be assigned by the team |
+| Maintainability | P2 | Not yet — planned (coverage in CI) | Pending — to be assigned by the team |
 
 ---
 

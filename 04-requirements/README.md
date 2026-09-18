@@ -30,58 +30,60 @@ NFRs are usually harder to meet than FRs and are ignored more frequently. **They
 ## What is here and how to fill it in
 
 ### `functional.md` ⭐
-List of all the system's functional requirements.
-**Fill in:** numbered, with the module/service they belong to, source (originating HU), priority.
+List of all the system's functional requirements (FR01–FR19).
+**Status:** ✅ Completed (19 FRs extracted from `01-context/scope.md`, mapped to the 9 bounded contexts)
 
 **Format:**
 ```markdown
 | ID | Module | Description | Source (HU) | Priority |
 |----|--------|-------------|------------|---------|
-| FR-001 | [Service] | The system must [do something] | HU-XXX-001 | High |
+| FR01 | iam-service, people-service | Authenticate a user with role-based access and register a Person linked to a unit | HU-IAM-001, HU-PPL-001 | High |
 ```
 
 ### `non-functional.md` ⭐
-Quality, performance, and technical constraint requirements.
-**Fill in:** by category (performance, availability, security, scalability, etc.)
+Quality, performance, and technical constraint requirements (NFR-001 to NFR-008).
+**Status:** ✅ Completed (all 8 NFRs measurable, validated in staging pipeline, aligned to formative-project scope)
 
 **Format:**
 ```markdown
 ## Performance
 | ID | Requirement | Metric | How to verify |
 |----|------------|--------|--------------|
-| NFR-001 | Response time | p95 < 200ms | Load test with K6 |
+| NFR-001 | Response time | P95 < 300ms under 50 RPS | Load test with K6 in staging |
 
 ## Availability
 | ID | Requirement | Metric | How to verify |
 |----|------------|--------|--------------|
-| NFR-010 | Uptime | 99.9% monthly | Production monitoring |
+| NFR-002 | Uptime SLO | 99.9% monthly | Production monitoring (TBD) |
 
 ## Security
 | ID | Requirement | Description |
 |----|------------|-------------|
-| NFR-020 | Authentication | JWT with 1-hour expiration |
+| NFR-004 | Authentication | JWT with 1-hour expiration; Ley 1581 de 2012 compliance |
 ```
 
 ### `user-stories.md`
-Formalized user stories (coming from the `03-product/` backlog).
-**Fill in:** with As/I want/So that format + verifiable acceptance criteria.
+Formalized user stories (HU-IAM-001 through HU-REP-001, cut into 3 sprints).
+**Status:** ✅ Completed (19 HUs with As/I want/So that + Gherkin acceptance criteria + DoD)
 
 ### `traceability-matrix.md` ⭐
-Table that connects: HU → Requirement → Test case.
-**Fill in:** when you have requirements and tests defined. Allows coverage verification.
+Table that connects: FR → HU → Test case → Service.
+**Status:** ✅ Completed (maps 19 FRs to 19 HUs, 8 NFRs to validation tools, identifies 3 gaps pending confirmation)
 
 **Format:**
 ```markdown
-| HU | FR/NFR | Description | Test case | Status |
-|----|--------|-------------|----------|--------|
-| HU-IAM-001 | FR-001 | Login with email | TC-001 | ✅ |
+| FR ID | FR Description | HU(s) | Tests that verify it | Service | Status |
+|-------|---------------|-------|---------------------|---------|--------|
+| FR01 | Authenticate a user with role-based access... | HU-IAM-001, HU-PPL-001 | AuthenticationServiceTest.java, PersonServiceTest.java | iam-service, people-service | 🔴 Pending |
 ```
 
 ### `_template-hu.md`
-Template for a complete User Story with acceptance criteria.
+Template for a complete User Story with acceptance criteria, DoD, story points, and metadata.
+**Status:** ✅ Intact (reference template; do not modify without team consensus)
 
 ### `_template-nfr.md`
 Template for specifying non-functional requirements with their verification metrics.
+**Status:** ⚠️ Missing (referenced in this README but does not exist yet; low priority — `non-functional.md` already carries the full specifications)
 
 ---
 
@@ -89,11 +91,13 @@ Template for specifying non-functional requirements with their verification metr
 
 | This section feeds... | Why |
 |-----------------------|-----|
-| `05-architecture/` | Performance/availability NFRs guide architectural decisions |
-| `11-quality/testing-strategy.md` | Each FR must have at least one test case |
-| `09-microservices/` | FRs are grouped by responsible service |
-| `07-api/` | Integration FRs → endpoints in API contracts |
-| `15-project-control/risks.md` | Very demanding NFRs usually generate technical risks |
+| `02-domain/` | FRs trace back to domain entities and events in entities-and-rules.md; NFRs inform infrastructure constraints |
+| `03-product/` | Requirements come from vision.md and problem-framing.md (problem statement); vision also defines the 3 sprints where each HU lands |
+| `05-architecture/decisions/` | NFRs (especially performance, availability, scalability) drive architectural decisions in ADRs; FR distribution across services comes from domain-map.md |
+| `09-microservices/` | Each service's responsibility is defined by the FRs assigned to it in traceability-matrix.md |
+| `11-quality/testing-strategy.md` | Each FR must have at least one test case; traceability-matrix.md shows which tests cover which FRs/NFRs |
+| `07-api/` | Functional FRs that span services → API contracts (endpoints, request/response shapes) |
+| `10-devops/` | NFRs (especially performance, availability, observability) define the CI/CD pipeline requirements and monitoring strategy |
 
 ---
 
@@ -111,7 +115,9 @@ Template for specifying non-functional requirements with their verification metr
 
 ## Questions this section must answer
 
-- What must the system do for each type of user?
-- With what speed, availability, and security?
-- Which requirement originates each test case?
-- Are all requirements covered by tests?
+- **What must the system do for each type of user?** ✅ Answered in `user-stories.md` (HU-IAM-001 → HU-REP-001, one per role/feature)
+- **With what speed, availability, and security?** ✅ Answered in `non-functional.md` (NFR-001 → NFR-008, with metrics and validation strategy)
+- **Which requirement originates each test case?** ✅ Answered in `traceability-matrix.md` (FR/NFR → Test class names)
+- **Are all requirements covered by tests?** ⚠️ In progress — test implementation pending (CI/CD pipeline in `10-devops/` not yet defined)
+- **Who is responsible for each FR?** ✅ Answered by service ownership in traceability-matrix.md (each FR assigned to one or more services)
+- **Are there any gaps between specification and implementation?** ✅ Identified in traceability-matrix.md "Identified gaps" section (3 items pending confirmation)
