@@ -10,19 +10,19 @@
 
 > Use the Geoffrey Moore template:
 
-**For** [target customer]
-**who** [has the need / faces the problem]
-**the** [product name]
-**is a** [product category]
-**that** [main benefit / reason to choose]
-**unlike** [competing alternative]
-**our product** [key differentiator].
+**For** administrators and Boards of Trustees of small-to-medium mixed residential complexes (residential and commercial units) in Colombia,
+**who** manage fees, maintenance, access control, correspondence, communications, and extraordinary expense approvals through fragmented manual tools (notebooks, Excel, WhatsApp),
+**the** resi-complex
+**is a** web-based residential complex management system,
+**that** centralizes units, people, differentiated fees, maintenance requests, access control, correspondence, segmented communications, and expense approvals in one place, giving transparency to residents and commercial owners/tenants and full traceability to the Board of Trustees,
+**unlike** generic PH (property horizontal) administration platforms such as ConjuntoApp, TUCO 360, Edifia, or PH360,
+**our product** natively treats residential and commercial units as first-class, differentiated entities across fees, communications, and rules, instead of bolting commercial support onto a residential-only model.
 
 ---
 
 ## Team mission
 
-> In 1-2 sentences: why does this team exist? What change in the world does it seek to achieve?
+To bring transparency and traceability to the day-to-day administration of small-to-medium mixed residential/commercial complexes, replacing fragmented manual tools (notebooks, spreadsheets, WhatsApp) with a centralized, secure, microservices-based system — built as a formative software engineering project for the ADSO program at SENA.
 
 ---
 
@@ -33,9 +33,10 @@ They should be few (3-5) and consistent over time.
 
 | Pillar | Description | Success metrics |
 |--------|-------------|----------------|
-| [Pillar 1: e.g. Speed] | [What it means for our product] | [KPIs] |
-| [Pillar 2: e.g. Reliability] | [Description] | [KPIs] |
-| [Pillar 3: e.g. Scale] | [Description] | [KPIs] |
+| Residential/commercial differentiation | Every core process (fees, communications, access) natively distinguishes residential units from commercial establishments, which competitors don't cover natively (see market research, `03-product/market-research.md`) | % of fee/communication flows with residential vs. commercial logic implemented |
+| Traceability | Every critical action (expense approval, maintenance request status, visitor/correspondence log) leaves an auditable record | % of RF01–RF19 with full history/audit trail; % of expense proposals with recorded approval history |
+| Security by design | RBAC by role, JWT with short expiration and refresh rotation, bcrypt-hashed passwords, parameterized queries — non-negotiable per team governance (`00-governance/`) | 0 critical security findings in code review/PR checks |
+| Usability & mobility | The system must be usable from a phone, since guards and maintenance staff work on the move (RNF03) | % of core flows validated as usable on mobile |
 
 ---
 
@@ -48,17 +49,17 @@ They should be few (3-5) and consistent over time.
 
 ```
 Q1 2024 ──── Q2 2024 ──── Q3 2024 ──── Q4 2024
-     │              │              │              │
-  [MVP]      [Feature A]    [Feature B]   [Scale]
-  Validate    Expand         Deepen        Grow
-  hypothesis  the market     the value
+     │                │                │                │
+   [MVP core]   [Operations]      [Governance]      [Polish & docs]
+   Validate       Expand            Deepen            Consolidate
+   hypothesis     the flows         the value         for delivery
 ```
 
 | Horizon | Period | Objective | Epics / Features | Uncertainty |
 |---------|--------|----------|----------------|-------------|
-| H1 (Now) | [Q1] | [Objective] | [Epic 1, Epic 2] | Low |
-| H2 (Next) | [Q2] | [Objective] | [Epic 3, Area X] | Medium |
-| H3 (Later) | [Q3-Q4] | [Objective] | [Area Y, Area Z] | High |
+| H1 (Now) | Sprint 1–2 | Stand up identity, units, and people management | IAM (RF01), Units & commercial establishments (RF02–RF04), People | Low |
+| H2 (Next) | Sprint 3–4 | Enable day-to-day operations residents/staff interact with | Maintenance requests (RF05–RF07), Differentiated fees (RF08–RF10), Access control & correspondence (RF12–RF16) | Medium |
+| H3 (Later) | Sprint 5+ | Close the governance loop and give visibility | Communications (RF11), Extraordinary expense approval (RF17–RF18), Reports (RF19) | High |
 
 ---
 
@@ -66,11 +67,13 @@ Q1 2024 ──── Q2 2024 ──── Q3 2024 ──── Q4 2024
 
 These principles guide design and prioritization decisions when there are trade-offs.
 
-1. **[Principle 1]:** [description. Example: "New user first — every new feature must be understandable in 2 minutes without onboarding"]
+1. **Residential ≠ Commercial:** every feature that touches units, fees, or communications must explicitly define its behavior for both residential and commercial units — never assume one and patch the other later.
 
-2. **[Principle 2]:** [description. Example: "Opinionated about what matters, flexible on the secondary"]
+2. **Traceability first:** if an action affects money, access, or a Board decision, it must be logged and queryable later. When in doubt, log it.
 
-3. **[Principle 3]:** [description]
+3. **Security is not optional:** RBAC, hashed passwords, parameterized queries, and generic client-facing errors apply to every service from day one, per `00-governance/security.md` — no service ships without them.
+
+4. **Mobile-usable, not mobile-only:** guards, maintenance staff, and residents often act from a phone; every core flow must work responsively (RNF03), without requiring a desktop-only experience.
 
 ---
 
@@ -78,13 +81,14 @@ These principles guide design and prioritization decisions when there are trade-
 
 > The product is "done" when it achieves these OKRs:
 
-**Objective:** [What we want to achieve]
+**Objective:** Deliver a functional MVP that covers RF01–RF19, validated with a real or simulated pilot residential complex, with governance and documentation standards fully applied.
 
 | Key Result | Baseline | Target | Date |
 |------------|---------|--------|------|
-| KR1: [specific metric] | [current value] | [target value] | [date] |
-| KR2: [metric] | [current] | [target] | [date] |
-| KR3: [business metric] | [current] | [target] | [date] |
+| KR1: % of RF01–RF19 implemented and passing acceptance criteria | 0% | 100% | **TBD** — end of academic term |
+| KR2: Role-based surveys/interviews applied and analyzed (5 roles) | 0 / 5 applied | 5 / 5 applied and analyzed | **TBD** |
+| KR3: Microservices catalog confirmed with instructor | Proposed, not confirmed | Confirmed | **TBD** |
+| KR4: Response time in normal operations (RNF01) | N/A (no system yet) | < 2 seconds | **TBD** |
 
 ---
 

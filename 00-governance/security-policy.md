@@ -46,32 +46,22 @@
 
 ### RBAC (Role-Based Access Control)
 
+resi-complex has 5 real authentication roles (see `01-context/glossary.md`). Permissions follow the `[resource]:[action]` model, with `:own` marking resource-level ownership checks (e.g., a resident can only read their own fee status).
+
 | Role | Description | Permissions |
 |------|-------------|------------|
-| `SUPER_ADMIN` | System technical administrator | All |
-| `ADMIN` | Business administrator | [define] |
-| `OPERATOR` | Operator with write permissions | [define] |
-| `VIEWER` | Read-only | [define] |
-| `[CUSTOM_ROLE]` | [description] | [define] |
-
-**Permission model:**
-
-```
-Permission: [resource]:[action]
-
-Examples:
-  orders:create
-  orders:read
-  orders:update
-  orders:delete
-  users:read
-  reports:export
-```
+| `ADMINISTRATOR` | Manages the complex's daily operation | `units:*`, `people:*`, `fees:*`, `requests:read`, `requests:assign`, `announcements:*`, `expenses:create`, `reports:read` |
+| `BOARD` | Decides on extraordinary expenses | `expenses:approve`, `expenses:reject`, `expenses:read`, `reports:read` |
+| `PERSON` | Resident / commercial owner or tenant | `requests:create`, `requests:read:own`, `fees:read:own`, `announcements:read`, `correspondence:read:own` |
+| `MAINTENANCE_STAFF` | Handles assigned maintenance requests | `requests:read:assigned`, `requests:update:assigned` |
+| `SECURITY_GUARD` | Registers visitors, vehicles, correspondence | `visits:create`, `visits:read`, `vehicles:create`, `correspondence:create` |
 
 **Validation:**
 - The API Gateway validates the JWT (signature and expiration)
 - Each service validates the role permissions for the specific operation
-- Roles are included in the JWT as claim `roles: ["OPERATOR", "VIEWER"]`
+- Roles are included in the JWT as claim `roles: ["ADMINISTRATOR"]` (a user has exactly one of the 5 roles)
+- Resource-level ownership (`:own`, `:assigned`) is verified explicitly in the service layer, comparing the authenticated user against the resource owner/assignee — role membership alone is not sufficient
+
 
 ---
 

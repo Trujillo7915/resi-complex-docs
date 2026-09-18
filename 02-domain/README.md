@@ -1,7 +1,8 @@
 # 02 — Problem Domain
 
-> **What is this?** The mental model of the business. It is not technology — it is understanding
-> the problem the system solves before writing code. This section comes from Domain-Driven Design (DDD).
+> **What is this?** The mental model of the resi-complex business. It is not
+> technology — it is the shared understanding of the problem the system solves,
+> captured before writing code. This section follows Domain-Driven Design (DDD).
 
 ## Why this section exists
 
@@ -11,99 +12,81 @@ When developers do not deeply understand the business:
 - Names in the code do not match the business's names → permanent confusion
 - Microservice boundaries are drawn incorrectly
 
-This section captures domain knowledge **before** designing the architecture.
+This section captures resi-complex's domain knowledge **before** the team finalizes
+`05-architecture/`.
+
+---
+
+## Status
+
+| File | Status | Version | Notes |
+|------|--------|---------|-------|
+| `domain-map.md` | Draft, filled | v0.2 | 9 bounded contexts identified; not yet validated in a real Event Storming session |
+| `entities-and-rules.md` | Draft, filled | v0.2 | 10 entities, 4 Value Objects, 5 Aggregates documented |
+| `domain-events.md` | Draft, filled | v0.2 | 16 domain events, 6 policies, 3 event flows documented |
 
 ---
 
 ## Key concepts you must know
 
-**Entity:** Domain object with a unique identity (e.g.: a `Student` identified by their code).
+**Entity:** Domain object with a unique identity (e.g. a `MaintenanceRequest`
+identified by its ID, regardless of status changes).
 
-**Value Object:** Object with no identity of its own, defined by its attributes (e.g.: `Address`, `Price`).
+**Value Object:** Object with no identity of its own, defined by its attributes
+(e.g. `Money`, `Email`, `UnitType`).
 
 **Aggregate:** Group of entities treated as a unit. Only the aggregate root
-can be referenced from outside.
+can be referenced from outside (e.g. `ExpenseProposal` is the root; its `Approval`
+records can only be reached through it).
 
-**Domain Event:** Something that occurred in the business that other parts of the system must know
-(e.g.: `StudentEnrolled`, `PaymentApproved`). They are facts, stated in past tense.
+**Domain Event:** Something that occurred in the business that other bounded contexts
+must know about (e.g. `FeeGenerated`, `MaintenanceRequestCreated`). Stated in past
+tense, immutable.
 
-**Bounded Context:** Area of the system where a particular model applies.
-Each microservice generally corresponds to a bounded context.
+**Bounded Context:** Area of the system where a particular model applies. In
+resi-complex, each of the 9 bounded contexts maps 1:1 to a microservice
+(`iam-service`, `units-service`, `people-service`, `maintenance-service`,
+`billing-service`, `communications-service`, `access-control-service`,
+`finance-approval-service`, `reports-service`).
 
 ---
 
-## What is here and how to fill it in
+## What's in this folder
 
 ### `domain-map.md` ⭐
-Map of all bounded contexts and how they relate.
-**Fill in:** draw the contexts as rectangles and the relationships between them
-(upstream/downstream, shared kernel, anti-corruption layer).
-
-**Format:**
-```markdown
-## Bounded Contexts
-
-### [Context Name]
-**Responsibility:** [what this context manages]
-**Main entities:** [list]
-**Owning team:** [team]
-
-## Relationship map
-[ASCII diagram or description of how the contexts relate]
-
-| Context A | Relationship | Context B | Description |
-|-----------|-------------|-----------|-------------|
-| [A] | downstream-of | [B] | [A] consumes events from [B] |
-```
+The 9 bounded contexts of resi-complex, their Ubiquitous Language, the Context Map
+(who is upstream/downstream of whom), and the Core/Supporting/Generic classification.
+**Core Domain:** Billing and Units Management — this is where the tech watch found the
+project's real competitive differentiator (residential + commercial units with
+differentiated fee rates, which no evaluated competitor covers natively).
 
 ### `entities-and-rules.md` ⭐
-Catalog of entities, value objects, and business rules.
-**Fill in:** for each entity: name, attributes, invariants (rules that MUST ALWAYS hold),
-behaviors.
-
-**Format:**
-```markdown
-## Entity: [EntityName]
-**Belongs to:** [Bounded Context]
-**Identifier:** [field that makes it unique]
-
-### Attributes
-| Attribute | Type | Description | Required | Rules |
-|-----------|------|-------------|---------|-------|
-
-### Business rules (invariants)
-- [ ] [A rule that must always hold]
-
-### Behaviors (domain methods)
-- `[name()]`: [what it does]
-```
+The tactical DDD building blocks: `Unit`, `Person`, `MaintenanceRequest`,
+`AdministrationFee`, `Correspondence`, `Visit`, `ExpenseProposal`, and their
+Value Objects (`Money`, `UnitType`, `Email`, `VisitorVehicle`) and Aggregates, with
+state machines and invariants for each.
 
 ### `domain-events.md` ⭐
-List of all events that occur in the domain.
-**Fill in:** event name (past tense), what triggers it, what data it carries, who consumes it.
-
-**Format:**
-```markdown
-| Event | Triggered by | Data | Consumers | Bounded Context |
-|-------|-------------|------|-----------|----------------|
-| [NameInPastTense] | [action that causes it] | [event fields] | [what listens to this] | [context] |
-```
+The 16 domain events resi-complex needs (e.g. `UnitRegistered`,
+`MaintenanceRequestCreated`, `FeeGenerated`, `CorrespondenceReceived`,
+`ExpenseProposalApproved`), their payload schemas, consumers, the policies that react
+to them, and 3 illustrative end-to-end event flows.
 
 ---
 
 ## Correlations with other sections
 
-| This section feeds... | Why |
-|-----------------------|-----|
-| `05-architecture/overview.md` | Bounded contexts → microservices |
-| `06-data/models.md` | Entities → data tables/collections |
-| `07-api/contracts/` | Domain events → events in async APIs |
-| `09-microservices/event-catalog.md` | All domain events are registered there |
-| `04-requirements/user-stories.md` | Business rules → acceptance criteria |
+| This section feeds... | Why | Status in this repo |
+|-----------------------|-----|----------------------|
+| `05-architecture/overview.md` | Bounded contexts → microservices | Still the generic scaffold; needs updating with these 9 contexts |
+| `06-data/models.md` | Entities → data tables | Still the generic scaffold |
+| `07-api/` | Domain events → AsyncAPI contracts | Not started |
+| `09-microservices/service-catalog.md` | All 9 services should be listed here | Still generic (`api-gateway`/`auth-service` examples, Node.js/PostgreSQL) |
+| `04-requirements/user-stories.md` | Business rules → acceptance criteria | Still the generic scaffold |
 
 ---
 
-## Recommended tool: Event Storming
+## Recommended next step: Event Storming
 
 **Event Storming** is a domain discovery workshop with sticky notes:
 1. 🟠 Orange: Domain events (past tense)
@@ -112,13 +95,24 @@ List of all events that occur in the domain.
 4. 🟣 Purple: Policies (automatic reactions)
 5. 🟦 Light blue: External systems
 
-Running an Event Storming session with the team before filling in this section saves weeks of redesign.
+resi-complex has **not** run this session yet. Everything in `domain-map.md`,
+`entities-and-rules.md`, and `domain-events.md` was derived by reading the existing
+project docs (context, product, governance) rather than from a live workshop with the
+whole team. Running one before finalizing `05-architecture/` and `06-data/` will
+confirm — or correct — the bounded context boundaries and event list above.
 
 ---
 
-## Questions this section must answer
+## Questions this section answers
 
-- What are the main business entities?
-- What rules can NEVER be violated in the system?
-- What important events occur in the domain?
-- Where are the natural boundaries of the system (for defining microservices)?
+- What are resi-complex's main business entities? → `Unit`, `Person`,
+  `MaintenanceRequest`, `AdministrationFee`, `Correspondence`, `Visit`,
+  `ExpenseProposal`, and their supporting Value Objects.
+- What rules can NEVER be violated? → see the **Invariants** in
+  `entities-and-rules.md` for each entity and aggregate.
+- What important events occur in the domain? → see the **Event catalog** and
+  **Event summary table** in `domain-events.md`.
+- Where are the natural boundaries of the system? → the 9 bounded contexts in
+  `domain-map.md`, classified as Core (Billing, Units Management), Supporting
+  (Maintenance, Communications, Access Control, People Management, Financial
+  Approval), or Generic (IAM, Reports).
