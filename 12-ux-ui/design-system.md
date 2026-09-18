@@ -13,39 +13,39 @@ Tokens are the design system's variables. Changing a token changes the entire sy
 ### Colors
 
 ```css
-/* Base palette */
---color-primary-50:  #[hex];   /* Lightest */
---color-primary-100: #[hex];
---color-primary-500: #[hex];   /* Default */
---color-primary-900: #[hex];   /* Darkest */
+/* Base palette — proposed, pending team/branding approval */
+--color-primary-50:  #E8F0FE;   /* Lightest */
+--color-primary-100: #C3D9FC;
+--color-primary-500: #1A5FB4;   /* Default — institutional blue */
+--color-primary-900: #0B2E5C;   /* Darkest */
 
---color-secondary-500: #[hex];
---color-neutral-50:  #[hex];
---color-neutral-900: #[hex];
+--color-secondary-500: #2E7D5B;  /* Muted green — complements the primary blue */
+--color-neutral-50:  #F7F8FA;
+--color-neutral-900: #1C1E21;
 
 /* Semantic colors */
---color-success:  #[hex];      /* Green — success, confirmed */
---color-warning:  #[hex];      /* Yellow — caution, pending */
---color-error:    #[hex];      /* Red — error, cancelled */
---color-info:     #[hex];      /* Blue — neutral information */
+--color-success:  #2E7D32;      /* Green — RESOLVED, PAID, APPROVED, DELIVERED */
+--color-warning:  #B98900;      /* Yellow/amber — PENDING states */
+--color-error:    #C62828;      /* Red — OVERDUE, REJECTED, URGENT priority */
+--color-info:     #1A5FB4;      /* Blue — ASSIGNED, IN_PROGRESS, UNDER_REVIEW */
 
 /* Text */
---color-text-primary:   #[hex];
---color-text-secondary: #[hex];
---color-text-disabled:  #[hex];
+--color-text-primary:   #1C1E21;
+--color-text-secondary: #5F6368;
+--color-text-disabled:  #9AA0A6;
 
 /* Backgrounds */
---color-bg-page:    #[hex];
---color-bg-card:    #[hex];
---color-bg-overlay: rgba([r],[g],[b], 0.5);
+--color-bg-page:    #F7F8FA;
+--color-bg-card:    #FFFFFF;
+--color-bg-overlay: rgba(28, 30, 33, 0.5);
 ```
 
 ### Typography
 
 ```css
 /* Families */
---font-family-sans:  '[Font name], sans-serif';
---font-family-mono:  '[Mono font name], monospace';
+--font-family-sans:  'Inter, sans-serif';
+--font-family-mono:  'JetBrains Mono, monospace';
 
 /* Sizes (modular scale 1.25) */
 --font-size-xs:   0.75rem;   /* 12px */
@@ -66,6 +66,10 @@ Tokens are the design system's variables. Changing a token changes the entire sy
 --line-height-normal: 1.5;
 --line-height-loose:  1.8;
 ```
+
+> `Inter` is proposed for its strong legibility in data-dense tables (fees, requests,
+> visit logs), which make up most of resi-complex's screens. Swap freely if the team
+> prefers another font — no domain reason ties this choice down.
 
 ### Spacing
 
@@ -88,7 +92,7 @@ Tokens are the design system's variables. Changing a token changes the entire sy
 --radius-sm: 4px;
 --radius-md: 8px;
 --radius-lg: 16px;
---radius-full: 9999px;  /* Pill */
+--radius-full: 9999px;  /* Pill — used for status badges */
 
 /* Shadows */
 --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
@@ -104,28 +108,28 @@ Tokens are the design system's variables. Changing a token changes the entire sy
 
 | Variant | Use | Disabled state |
 |---------|-----|----------------|
-| Primary | Main action on the page | `opacity: 0.5; cursor: not-allowed` |
-| Secondary | Secondary actions | same |
-| Danger | Destructive actions (delete) | same |
-| Ghost | Tertiary actions, links | same |
+| Primary | Main action on the page (e.g. "Save unit", "Approve proposal") | `opacity: 0.5; cursor: not-allowed` |
+| Secondary | Secondary actions (e.g. "Cancel", "Back") | same |
+| Danger | Destructive actions (e.g. "Delete unit", "Reject proposal") | same |
+| Ghost | Tertiary actions, links (e.g. "View details") | same |
 
 **Usage rules:**
 - Only one Primary action per view
-- Danger only with modal confirmation ("Are you sure?")
-- Buttons have a loading state for async operations
+- Danger only with modal confirmation ("Are you sure?") — e.g. deleting a unit or rejecting an expense proposal
+- Buttons have a loading state for async operations (e.g. submitting a maintenance request)
 
 ### Forms
 
-| Component | When to use |
-|-----------|-------------|
-| Input text | Single-line free text |
-| Textarea | Multi-line free text |
-| Select | Fixed list of options (< 15 items) |
-| Combobox | List with search (> 15 items or dynamic loading) |
-| Checkbox | Independent binary option |
-| Radio | Select one option from a few (2-5) |
-| Toggle | Enable/disable a feature |
-| DatePicker | Date selection |
+| Component | When to use | resi-complex example |
+|-----------|-------------|----------------------|
+| Input text | Single-line free text | Unit number, visitor name |
+| Textarea | Multi-line free text | Maintenance request description, expense justification |
+| Select | Fixed list of options (< 15 items) | Unit type (RESIDENTIAL / COMMERCIAL), request priority |
+| Combobox | List with search (> 15 items or dynamic loading) | Selecting a Unit when registering a Person (large complexes) |
+| Checkbox | Independent binary option | — |
+| Radio | Select one option from a few (2-5) | Visitor type (personal visitor / commercial client) |
+| Toggle | Enable/disable a feature | — |
+| DatePicker | Date selection | Fee due date, expense proposal date range (if added later) |
 
 **Error messages in forms:**
 - The message appears below the field, in red
@@ -141,22 +145,63 @@ Tokens are the design system's variables. Changing a token changes the entire sy
 
 | Component | When | Duration |
 |-----------|------|---------|
-| Toast/Snackbar | Action confirmations | 4 seconds |
+| Toast/Snackbar | Action confirmations (e.g. "Request created", "Announcement published") | 4 seconds |
 | Inline alert | Form errors | Until corrected |
-| Modal | Destructive confirmations, irreversible actions | Until the user decides |
+| Modal | Destructive confirmations, irreversible actions (delete unit, reject proposal) | Until the user decides |
 | Loading spinner | Operations > 200ms | Until finished |
-| Skeleton | Loading list content / cards | Until loaded |
+| Skeleton | Loading list content / cards (e.g. fee list, requests list) | Until loaded |
 
 ### Data table
 
 | Aspect | Behavior |
 |--------|---------|
-| Pagination | Maximum 20 rows per page (user-configurable) |
+| Pagination | Maximum 20 rows per page (user-configurable) — applies to Units, People, Requests, Fees, Visits lists |
 | Sorting | Click on column, toggle asc/desc |
-| Filters | Side panel or filter row above the table |
-| Selection | Checkbox in the first column |
-| Actions | Final column with actions menu (edit, delete, etc.) |
-| Empty state | Illustration + message + primary action CTA |
+| Filters | Side panel or filter row above the table (e.g. filter requests by status/priority, fees by period) |
+| Selection | Checkbox in the first column (bulk actions, where applicable) |
+| Actions | Final column with actions menu (edit, delete, view detail) |
+| Empty state | Illustration + message + primary action CTA (e.g. "No maintenance requests yet" + "Create request") |
+
+---
+
+## Domain-specific components
+
+resi-complex's core screens are dominated by entities with a status lifecycle
+(`02-domain/entities-and-rules.md`). A consistent **Status Badge** component is used
+system-wide instead of ad-hoc colored text.
+
+### Status badge
+
+| Entity | Status value | Badge color token | Notes |
+|--------|-------------|--------------------|-------|
+| Maintenance Request | `PENDING` | `--color-warning` | |
+| Maintenance Request | `ASSIGNED` | `--color-info` | |
+| Maintenance Request | `IN_PROGRESS` | `--color-info` | |
+| Maintenance Request | `RESOLVED` | `--color-success` | Terminal state |
+| Administration Fee | `PENDING` | `--color-warning` | |
+| Administration Fee | `OVERDUE` | `--color-error` | |
+| Administration Fee | `PAID` | `--color-success` | Terminal state |
+| Correspondence | `PENDING` | `--color-warning` | |
+| Correspondence | `DELIVERED` | `--color-success` | Terminal state |
+| Expense Proposal | `UNDER_REVIEW` | `--color-info` | |
+| Expense Proposal | `APPROVED` | `--color-success` | Terminal state |
+| Expense Proposal | `REJECTED` | `--color-error` | Terminal state |
+
+### Priority badge (Maintenance Request only)
+
+| Priority | Badge color token | Notes |
+|----------|--------------------|-------|
+| `LOW` | `--color-neutral-900` on `--color-neutral-50` (no semantic color) | |
+| `MEDIUM` | `--color-info` | |
+| `HIGH` | `--color-warning` | |
+| `URGENT` | `--color-error` | Also bolded, to match the notification policy in `02-domain/domain-events.md` that immediately alerts maintenance staff |
+
+### Unit type badge
+
+| Unit type | Badge color token | Notes |
+|-----------|--------------------|-------|
+| `RESIDENTIAL` | `--color-secondary-500` | Neither type is "good" or "bad" — use the secondary/neutral palette, not semantic colors |
+| `COMMERCIAL` | `--color-primary-500` | |
 
 ---
 
@@ -164,21 +209,23 @@ Tokens are the design system's variables. Changing a token changes the entire sy
 
 ### Principles
 
-1. **Confirm before destroying:** Any action that permanently deletes or modifies data requires a confirmation modal.
+1. **Confirm before destroying:** Any action that permanently deletes or modifies data requires a confirmation modal (e.g. deleting a unit, rejecting an expense proposal — both terminal/hard-to-reverse actions per `02-domain/entities-and-rules.md`).
 
 2. **Immediate feedback:** Every action must have a visual response in < 100ms (even if it is just the loading state).
 
-3. **Prevent rather than correct:** Validate in real time in the form, not only on submit.
+3. **Prevent rather than correct:** Validate in real time in the form, not only on submit (e.g. a commercial unit's form should require establishment data before allowing submission, mirroring the `AGGR-INV-001` invariant in `entities-and-rules.md`).
 
-4. **Empty state as a feature:** The screen without data is the new user's first impression — guide them to the first action.
+4. **Empty state as a feature:** The screen without data is the new user's first impression — guide them to the first action (e.g. a brand-new resident's `/requests` screen should invite them to create their first request, not just show a blank table).
+
+5. **Ownership-aware UI:** Screens for `PERSON` and `MAINTENANCE_STAFF` never display data belonging to other units or unassigned requests — mirrors the ownership-level authorization concept in `01-context/glossary.md`.
 
 ### Error handling
 
 | Scenario | What to show |
 |----------|-------------|
 | Network error | Toast "No connection. Retrying..." with automatic retry |
-| 401 error | Redirect to login with message "Your session expired" |
-| 403 error | Screen "You do not have permission to view this" with link to support |
+| 401 error | Redirect to `/login` with message "Your session expired" |
+| 403 error | Screen "You do not have permission to view this" with a link back to `/dashboard` |
 | 404 error | 404 screen with back navigation |
 | 500 error | Error toast + "Retry" button |
 | Timeout | Toast "This is taking longer than normal" with cancel option |
@@ -189,16 +236,18 @@ Tokens are the design system's variables. Changing a token changes the entire sy
 
 | Aspect | Minimum required |
 |--------|-----------------|
-| Text contrast | WCAG AA (4.5:1 for normal text, 3:1 for large text) |
-| Keyboard navigation | All interactive elements accessible with Tab |
+| Text contrast | WCAG AA (4.5:1 for normal text, 3:1 for large text) — status badges must meet this against their background, not rely on color alone (pair with an icon or label) |
+| Keyboard navigation | All interactive elements accessible with Tab (important for front-desk operators using the Security Guard screens quickly) |
 | Form labels | All fields with associated label (`for` / `aria-label`) |
 | Images | Descriptive alt text on all non-decorative images |
 | Visible focus | Visible focus indicator on all interactive elements |
+| Responsive layout | The Single Source of Truth's original NFR03 requires the system to be usable from a mobile phone — every screen in `navigation-map.md` must work down to a small mobile viewport, not just tablet/desktop |
 
 ---
 
 ## Correlations
 
 - Navigation map → `12-ux-ui/navigation-map.md`
-- Wireframes → `12-ux-ui/wireframes.md`
-- UX non-functional requirements → `04-requirements/non-functional.md`
+- Wireframes → `12-ux-ui/wireframes.md` *(not created yet — pending; see `12-ux-ui/README.md`)*
+- Entities and their status lifecycles → `02-domain/entities-and-rules.md`
+- Roles referenced in ownership-aware UI rules → `00-governance/security-policy.md`
