@@ -1,7 +1,8 @@
 # 12 — UX/UI
 
-> **What is this?** The user experience design: how the system looks, how it is navigated,
-> and how it behaves from the end user's perspective.
+> **What is this?** The user experience design of resi-complex: how the system looks,
+> how it is navigated, and how it behaves from the end user's perspective — across all
+> 5 authentication roles.
 
 ## Why design comes before code
 
@@ -12,71 +13,36 @@ Changing the code in production with real users can cost days and reputation.
 
 ---
 
-## What is here and how to fill it in
+## Status
+
+| File | Status | Notes |
+|------|--------|-------|
+| `navigation-map.md` | Draft, filled | Routes, screen map, access matrix, and 4 end-to-end flows derived from the 22 User Stories in `04-requirements/user-stories.md` |
+| `design-system.md` | Draft, filled | Tokens, components, and domain-specific status/priority badges. Colors are a **proposed palette**, not an approved brand |
+| `wireframes.md` | **Not created yet** | Low-fidelity screens for the flows in `navigation-map.md`. This is intentionally left for the team to draw (in Figma, Balsamiq, or ASCII) — it is a visual design task, not something to generate from text alone |
+
+---
+
+## What's in this folder
 
 ### `navigation-map.md` ⭐ (Start here)
-The map of all screens/pages and how they connect.
-**Fill in:** navigation tree, from which screen you reach which, what role can access what.
-
-**Format:**
-```markdown
-## Navigation map
-
-### Public area (no authentication)
-- / (home)
-  - /login
-  - /register
-  - /recover-password
-
-### Private area — Role: [Role 1]
-- /dashboard
-  - /[module-1]
-    - /[module-1]/list
-    - /[module-1]/{id}/detail
-  - /profile
-
-### Private area — Role: [Role 2]
-[...]
-
-## Access matrix
-| Screen | [Role 1] | [Role 2] | [Admin] |
-|--------|---------|---------|---------|
-| /dashboard | ✅ | ✅ | ✅ |
-| /admin | ❌ | ❌ | ✅ |
-```
-
-### `wireframes.md`
-Low-fidelity designs of the main screens.
-**Fill in:** wireframes in ASCII, Figma, or Balsamiq. Focus on structure, not colors.
+The full route tree for resi-complex's frontend, a screen-by-screen map (route,
+component, minimum role, backend service, related HU), the role-vs-screen access
+matrix, and 4 illustrative user flows — including two that cross roles (a maintenance
+request from creation to resolution, and an expense proposal from creation to Board
+approval).
 
 ### `design-system.md`
-The project's design system: tokens, components, patterns.
-**Fill in:** color palette, typography, spacing, base components (buttons, forms, tables).
+resi-complex's design tokens (colors, typography, spacing), base components (buttons,
+forms, feedback, data tables), and — specific to this project — a **Status Badge**
+component mapped to every entity's lifecycle from `02-domain/entities-and-rules.md`
+(`MaintenanceRequest`, `AdministrationFee`, `Correspondence`, `ExpenseProposal`), plus
+a Priority badge and a Unit Type badge.
 
-**Format:**
-```markdown
-## Design tokens
-
-### Colors
-| Token | Value | Use |
-|-------|-------|-----|
-| --color-primary | #1976D2 | Primary buttons, links |
-| --color-error | #D32F2F | Error messages |
-| --color-success | #388E3C | Confirmations |
-
-### Typography
-| Level | Size | Weight | Use |
-|-------|------|--------|-----|
-| H1 | 32px | 700 | Page titles |
-| Body | 16px | 400 | General text |
-
-## Components
-### Primary button
-[description, variants, when to use it]
-
-### Data table
-[columns, pagination, search, inline actions]
-```
+### `wireframes.md` (pending)
+Low-fidelity layouts of the main screens listed in `navigation-map.md`. **Fill in:**
+one wireframe (ASCII, Figma link, or Balsamiq export) per screen in the screen map,
+focused on structure and content placement — not colors or final styling.
 
 ---
 
@@ -84,15 +50,16 @@ The project's design system: tokens, components, patterns.
 
 | This section is fed by... | And feeds into... |
 |---------------------------|-------------------|
-| `04-requirements/user-stories.md` → what flows exist | Screens implementing each HU |
-| `02-domain/entities-and-rules.md` → what data to display | Fields in wireframes |
-| `09-microservices/` → what APIs the frontend consumes | What data arrives at each screen |
+| `04-requirements/user-stories.md` — the 22 HUs across 9 epics define which screens and flows must exist | Screens implementing each HU |
+| `02-domain/entities-and-rules.md` — entity attributes and status lifecycles | Form fields, status/priority badges in `design-system.md` |
+| `00-governance/security-policy.md` — the 5 roles and their permissions | The access matrix in `navigation-map.md` |
+| `09-microservices/service-catalog.md` — which service backs which screen *(still the generic scaffold — needs updating to the real 9 services)* | The "Backend service" column in the screen map |
 
 ---
 
 ## Questions this section must answer
 
-- How many screens does the system have?
-- How does each type of user navigate?
-- What visual components are repeated?
-- What is the system's visual language?
+- How many screens does the system have? → 22 named screens across 9 modules, listed in the screen map in `navigation-map.md`.
+- How does each type of user navigate? → see the Access matrix in `navigation-map.md` — each of the 5 roles (`ADMINISTRATOR`, `BOARD`, `PERSON`, `MAINTENANCE_STAFF`, `SECURITY_GUARD`) has a distinct, non-overlapping set of accessible screens except `/dashboard`, `/announcements` (read), and `/profile`.
+- What visual components are repeated? → status badges, data tables, and forms with real-time validation — see `design-system.md`.
+- What is the system's visual language? → an institutional, trust-oriented palette proposed in `design-system.md`, pending final branding approval from the team.

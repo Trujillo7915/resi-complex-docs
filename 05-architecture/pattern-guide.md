@@ -1,16 +1,17 @@
-# Design Patterns and Microservices Guide
+# Design Patterns and Microservices Guide — resi-complex
 
 > This document is the project's pattern catalog.
 > For each pattern: when to use it, when NOT to, and an implementation example.
 > Patterns are not recipes — they are tools. Use them when the problem requires it.
 
-> **Stack note:** Descriptions and diagrams are technology-agnostic.
-> Illustrative code snippets use pseudo-TypeScript as a reference language
-> for its proximity to pseudocode syntax. To see the concrete implementation in your stack:
-> [`_stacks/node-typescript.md`](../_stacks/node-typescript.md) ·
-> [`_stacks/java-spring.md`](../_stacks/java-spring.md) ·
-> [`_stacks/python-fastapi.md`](../_stacks/python-fastapi.md) ·
-> [`_stacks/go.md`](../_stacks/go.md)
+> **Stack note:** resi-complex is locked to Java 17+ / Spring Boot 3.x
+> (`01-context/overview.md`). The pattern *concepts* below are technology-agnostic and kept in
+> pseudo-TypeScript for readability, matching the rest of this scaffold — but every concrete
+> implementation in this project must follow `_stacks/java-spring.md`'s conventions
+> (e.g. Resilience4j for Circuit Breaker, Spring Data JPA for repositories, Spring's
+> `ApplicationEventPublisher` or a real broker client for domain events). See
+> `hexagonal-architecture.md` for a fully worked Java example using the real
+> `MaintenanceRequest` aggregate.
 
 ---
 
@@ -40,20 +41,16 @@
 - When the exact type of object to create is not known until runtime
 - When creation has complex logic (validations, configuration)
 
-**Domain example:**
+**Domain example (resi-complex's own `MaintenanceRequest.create(...)` in `hexagonal-architecture.md`):**
 
 ```typescript
 // Factory Method — inside the Aggregate Root
-class Order {
-  // Instead of new Order(...), we use a factory method
-  static create(customerId: CustomerId, items: OrderItem[]): Order {
-    if (items.length === 0) throw new DomainException('INV-001');
-    return new Order(OrderId.new(), customerId, items, OrderStatus.PENDING);
-  }
-
-  static reconstitute(data: OrderData): Order {
-    // To reconstruct from the database
-    return new Order(new OrderId(data.id), new CustomerId(data.customerId), ...);
+class MaintenanceRequest {
+  // Instead of new MaintenanceRequest(...), a factory method enforces INV-001 and INV-003
+  static create(personId: PersonId, unitId: UnitId, type: string, description: string, priority: Priority): MaintenanceRequest {
+    if (!personId || !unitId) throw new DomainException('INV-001');
+    if (!priority) throw new DomainException('INV-003');
+    return new MaintenanceRequest(RequestId.new(), personId, unitId, priority, RequestStatus.PENDING, null);
   }
 }
 ```
@@ -64,16 +61,17 @@ class Order {
 
 **Problem:** An object has many optional parameters and construction becomes unreadable.
 
-**When to use it:** Complex configuration objects, test data builders.
+**When to use it:** Complex configuration objects, test data builders — e.g. building an
+`AdministrationFee` test fixture with varying `unitType`, `amount`, and `status` combinations.
 
 ```typescript
 // Builder — especially useful for tests
-const order = new OrderBuilder()
-  .withCustomer('customer-id-123')
-  .withItem(product1, quantity: 2)
-  .withItem(product2, quantity: 1)
-  .withAddress('5th Street #10-20, Neiva')
-  .inStatus(OrderStatus.CONFIRMED)
+const fee = new AdministrationFeeBuilder()
+  .forUnit('unit-id-123')
+  .forPeriod('2026-09')
+  .withUnitType(UnitType.COMMERCIAL)
+  .withAmount(350000.00)
+  .inStatus(FeeStatus.PENDING)
   .build();
 ```
 
@@ -85,11 +83,12 @@ const order = new OrderBuilder()
 
 **When to use it:** DB connections, configuration registries.
 
-**WARNING:** Singleton makes testing difficult. Prefer dependency injection.
+**WARNING:** Singleton makes testing difficult. Prefer dependency injection — Spring's IoC
+container already manages singleton scope for every `@Service`, `@Repository`, and
+`@Configuration` bean by default, so resi-complex should never need a hand-rolled Singleton.
 
 ```typescript
 // ✓ Better: Singleton managed by the DI container, not by the class itself
-// In the container (NestJS, tsyringe, etc.):
 container.registerSingleton(DatabaseConnection, DatabaseConnectionImpl);
 ```
 
@@ -99,7 +98,11 @@ container.registerSingleton(DatabaseConnection, DatabaseConnectionImpl);
 
 **Problem:** You want to use an existing class but its interface does not match the one you need.
 
-**When to use it:** Integration with external APIs, third-party libraries.
+**When to use it:** Integration with external APIs, third-party libraries. resi-complex has no
+external integrations in the MVP (`01-context/scope.md`), but this is exactly the shape of the
+Secondary Adapter pattern already used for `JpaMaintenanceRequestRepository implements
+MaintenanceRequestRepository` in `hexagonal-architecture.md` — the JPA repository *adapts*
+Spring Data's interface to the domain's own port.
 
 ```typescript
 // The domain defines the interface it needs
@@ -107,19 +110,10 @@ interface PaymentGatewayPort {
   charge(amount: Money, card: TokenData): Promise<ChargeResult>;
 }
 
-// The adapter translates to the external API
+// Future v2 candidate (payments are out of MVP scope, 01-context/scope.md item 3):
 class StripePaymentAdapter implements PaymentGatewayPort {
-  constructor(private stripe: Stripe) {}
-
   async charge(amount: Money, card: TokenData): Promise<ChargeResult> {
-    // Translate domain model → Stripe model
-    const charge = await this.stripe.charges.create({
-      amount: amount.toCents(),
-      currency: amount.currency,
-      source: card.token,
-    });
-    // Translate Stripe result → domain model
-    return new ChargeResult(charge.id, charge.status === 'succeeded');
+    // Translate domain model → Stripe model, and back
   }
 }
 ```
@@ -130,23 +124,21 @@ class StripePaymentAdapter implements PaymentGatewayPort {
 
 **Problem:** You want to add behavior to an object without modifying it or inheriting from it.
 
-**When to use it:** Logging, caching, validation, rate limiting around use cases.
+**When to use it:** Logging, caching, validation, rate limiting around use cases — e.g. caching
+`billing-service`'s fee-rate lookup (residential vs. commercial), which is read far more often
+than it changes.
 
 ```typescript
 // Cache decorator around the repository
-class CachedOrderRepository implements OrderRepositoryPort {
-  constructor(
-    private readonly repo: OrderRepositoryPort,
-    private readonly cache: CachePort,
-  ) {}
+class CachedFeeRateRepository implements FeeRateRepositoryPort {
+  constructor(private readonly repo: FeeRateRepositoryPort, private readonly cache: CachePort) {}
 
-  async findById(id: OrderId): Promise<Order | null> {
-    const cached = await this.cache.get(`order:${id.value}`);
-    if (cached) return OrderMapper.toDomain(cached);
-
-    const order = await this.repo.findById(id);
-    if (order) await this.cache.set(`order:${id.value}`, order, TTL_5_MINUTES);
-    return order;
+  async findByUnitType(unitType: UnitType): Promise<Money> {
+    const cached = await this.cache.get(`rate:${unitType}`);
+    if (cached) return Money.fromCache(cached);
+    const rate = await this.repo.findByUnitType(unitType);
+    await this.cache.set(`rate:${unitType}`, rate, TTL_5_MINUTES);
+    return rate;
   }
 }
 ```
@@ -157,25 +149,21 @@ class CachedOrderRepository implements OrderRepositoryPort {
 
 **Problem:** An object needs to notify others without knowing them directly.
 
-**When to use it:** To publish domain events after persisting the aggregate.
+**When to use it:** To publish domain events after persisting the aggregate — exactly what
+`MaintenanceRequest.domainEvents()` does in `hexagonal-architecture.md`, and what every one of
+the 16 events in `02-domain/domain-events.md` relies on.
 
 ```typescript
 // The Aggregate accumulates events — the UseCase publishes them
-class Order {
+class MaintenanceRequest {
   private readonly _events: DomainEvent[] = [];
 
-  confirm(): void {
-    // ... business logic ...
-    this._events.push(new OrderConfirmed(this.id));
+  assign(staffId: StaffId): void {
+    // ... business logic (INV-002) ...
+    this._events.push(new MaintenanceRequestStatusUpdated(this.id, this.status));
   }
 
-  get domainEvents(): DomainEvent[] {
-    return [...this._events];
-  }
-
-  clearEvents(): void {
-    this._events.length = 0;
-  }
+  get domainEvents(): DomainEvent[] { return [...this._events]; }
 }
 ```
 
@@ -185,22 +173,18 @@ class Order {
 
 **Problem:** You want to swap algorithms at runtime.
 
-**When to use it:** Discount strategies, calculation algorithms, payment methods.
+**When to use it:** resi-complex's own `FeeCalculationService`
+(`02-domain/entities-and-rules.md`, Domain Services section) is already a Strategy-shaped
+solution to a real requirement: applying a residential vs. commercial rate (FR09).
 
 ```typescript
-interface DiscountStrategy {
-  calculate(subtotal: Money, user: User): Money;
+interface FeeRateStrategy {
+  calculate(unitType: UnitType, residentialRate: Money, commercialRate: Money): Money;
 }
 
-class StudentDiscount implements DiscountStrategy {
-  calculate(subtotal: Money, user: User): Money {
-    return subtotal.multiply(0.15); // 15% discount
-  }
-}
-
-class CorporateDiscount implements DiscountStrategy {
-  calculate(subtotal: Money, user: User): Money {
-    return subtotal.multiply(0.20); // 20% discount
+class StandardFeeRateStrategy implements FeeRateStrategy {
+  calculate(unitType: UnitType, residentialRate: Money, commercialRate: Money): Money {
+    return unitType === UnitType.COMMERCIAL ? commercialRate : residentialRate;
   }
 }
 ```
@@ -211,25 +195,19 @@ class CorporateDiscount implements DiscountStrategy {
 
 **Problem:** An algorithm has a fixed structure but some steps vary.
 
-**When to use it:** Process flows with variations (export to CSV, Excel, PDF).
+**When to use it:** Process flows with variations — e.g. `reports-service`'s FR19 exports
+(requests-by-status vs. pending-fee-arrears) share the same fetch → transform → render skeleton.
 
 ```typescript
 abstract class ReportExporter {
-  // Template Method — fixed structure
   async export(data: ReportData): Promise<Buffer> {
     const validated = await this.validate(data);
     const transformed = await this.transform(validated);
-    const buffer = await this.generate(transformed);
-    await this.recordExport(data.userId);
-    return buffer;
+    return this.generate(transformed);
   }
-
   protected abstract transform(data: ReportData): Promise<TransformedData>;
   protected abstract generate(data: TransformedData): Promise<Buffer>;
-  
-  // Steps with default implementation (can be overridden)
   protected async validate(data: ReportData): Promise<ReportData> { return data; }
-  protected async recordExport(userId: UserId): Promise<void> {}
 }
 ```
 
@@ -245,21 +223,22 @@ abstract class ReportExporter {
 
 ```
                     ┌─────────────────┐
-Mobile ──────────▶  │                 │ ──▶ [Service A]
-Web ────────────▶  │   API Gateway   │ ──▶ [Service B]
-IoT ────────────▶  │                 │ ──▶ [Service C]
+Web ────────────▶  │   API Gateway   │ ──▶ [iam-service]
+                    │                 │ ──▶ [units-service]
+                    │                 │ ──▶ [...7 more services]
                     └─────────────────┘
                          Does:
                     - Routing
-                    - Auth/AuthZ
+                    - Auth/AuthZ (JWT validation, centralized)
                     - Rate limiting
-                    - SSL termination
-                    - Request aggregation
+                    - CORS
 ```
 
-**When to use it:** Always, in microservices architectures it is essential.
+**When to use it:** Always, in microservices architectures it is essential. **resi-complex has
+not yet decided on this** — tracked as `overview.md` AT-001.
 
-**Tools:** Kong, AWS API Gateway, NGINX, Traefik, Spring Cloud Gateway.
+**Tools:** Kong, AWS API Gateway, NGINX, Traefik, Spring Cloud Gateway (the Spring-native option,
+consistent with the locked stack).
 
 ---
 
@@ -267,13 +246,8 @@ IoT ────────────▶  │                 │ ──▶ [
 
 **Problem:** Mobile and web need data in very different formats but share the same API.
 
-```
-Mobile ──▶ [BFF Mobile]  ──▶ Internal services
-Web    ──▶ [BFF Web]     ──▶ Internal services
-Alexa  ──▶ [BFF Voice]   ──▶ Internal services
-```
-
-**When to use it:** When clients have very different needs. Use sparingly — each BFF is an API to maintain.
+**Not relevant to resi-complex's MVP:** `01-context/scope.md` explicitly excludes a mobile app
+("web app only") — a single web client has no need for a BFF split.
 
 ---
 
@@ -281,13 +255,8 @@ Alexa  ──▶ [BFF Voice]   ──▶ Internal services
 
 **Problem:** You need to migrate a monolith to microservices without rewriting it all at once.
 
-```
-Phase 1:  Client → Monolith (100% traffic)
-Phase 2:  Client → API Gateway → Monolith (70%) + New Service (30%)
-Phase 3:  Client → API Gateway → New Service (100%) — monolith retired
-```
-
-**How:** The API Gateway gradually routes traffic to the new service while the monolith keeps running.
+**Not relevant to resi-complex:** there is no pre-existing monolith to migrate from — the system
+is greenfield (`01-context/overview.md`: "implementation not started").
 
 ---
 
@@ -300,27 +269,27 @@ Phase 3:  Client → API Gateway → New Service (100%) — monolith retired
 | Protocol | HTTP/1.1 or HTTP/2 | HTTP/2 |
 | Serialization | JSON (human-readable) | Protocol Buffers (efficient) |
 | Typing | Manual with OpenAPI | Automatic with .proto |
-| Streaming | Not native | Yes (unidirectional and bidirectional) |
 | Recommended use | Public APIs, external communication | Internal service-to-service communication |
 
-**When to use synchronous communication:**
-- When you need the response immediately (queries, UI)
-- Low-latency operations the user is waiting for
+**resi-complex's choice:** REST, for all 9 services. `04-requirements/non-functional.md`'s
+critical endpoints (`POST /auth/login`, `POST /fees/generate`, `POST /maintenance-requests`,
+`POST /visits`) are already specified as REST paths — gRPC was never on the table for this
+formative delivery, and `07-api/` is explicitly OpenAPI-based per `00-sdd-guide.md`.
 
 ---
 
 #### Asynchronous: Message Broker (Kafka / RabbitMQ)
 
 ```
-[Service A] ──publishes──▶ [Topic/Queue] ──consumes──▶ [Service B]
-                                                        [Service C]
+[units-service] ──publishes UnitRegistered──▶ [Topic: units.unit.registered] ──consumes──▶ [billing-service]
+                                                                              ──consumes──▶ [access-control-service]
+                                                                              ──consumes──▶ [communications-service]
 ```
 
-**When to use asynchronous communication:**
-- When the operation does not require an immediate response
-- When you want to decouple producers from consumers
-- For background processing (emails, notifications, reports)
-- To guarantee delivery (the broker's DB is durable)
+**When to use asynchronous communication:** exactly the 16 flows already designed in
+`02-domain/domain-events.md` (e.g. `FeeGenerated` → `communications-service` notifies the
+Person, `reports-service` updates arrears). **The broker technology itself is still
+undecided** — `overview.md` AT-002.
 
 ---
 
@@ -331,26 +300,12 @@ Phase 3:  Client → API Gateway → New Service (100%) — monolith retired
 **Problem:** A slow or failing service causes yours to fail too (failure cascade).
 
 ```
-CLOSED state (normal):
-  Calls pass through → if N consecutive failures → switch to OPEN
-
-OPEN state (circuit breaker):
-  Calls blocked immediately (fail fast) → after T seconds → HALF-OPEN
-
-HALF-OPEN state (testing):
-  Allows 1 call → if it fails: back to OPEN | if it passes: back to CLOSED
+CLOSED (normal) → N consecutive failures → OPEN (fail fast) → after T seconds → HALF-OPEN → test call
 ```
 
-```typescript
-// With opossum or resilience4j
-const circuit = new CircuitBreaker(externalService.call, {
-  timeout: 3000,                    // Timeout per call
-  errorThresholdPercentage: 50,     // % of errors to open
-  resetTimeout: 30000,              // Time in OPEN before trying HALF-OPEN
-});
-
-circuit.fallback(() => ({ cached: true, data: lastReliableCache }));
-```
+**resi-complex's choice, once adopted:** Resilience4j — the Spring-native option, listed as the
+cross-cutting concern's tool in `overview.md` §7. **Not yet implemented** (depends on AT-001/AT-002
+existing first — there is little to circuit-break before services actually call each other).
 
 ---
 
@@ -359,21 +314,19 @@ circuit.fallback(() => ({ cached: true, data: lastReliableCache }));
 **Problem:** Transient failures (unstable network, service restarting).
 
 ```typescript
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  options = { attempts: 3, backoffBase: 1000 }
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, options = { attempts: 3, backoffBase: 1000 }): Promise<T> {
   for (let attempt = 1; attempt <= options.attempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
+    try { return await fn(); }
+    catch (err) {
       if (attempt === options.attempts) throw err;
-      const delay = options.backoffBase * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-      await sleep(delay + Math.random() * 100); // Jitter to avoid thundering herd
+      await sleep(options.backoffBase * 2 ** (attempt - 1));
     }
   }
 }
 ```
+
+Directly applicable to resi-complex's event consumers per `02-domain/domain-events.md`'s
+resilience section ("Retries before DLQ: 3-5, exponential backoff 1s → 2s → 4s → 8s").
 
 ---
 
@@ -381,129 +334,81 @@ async function withRetry<T>(
 
 #### Database per Service
 
-**Rule:** Each microservice has its own database. No service directly accesses another service's database.
+**Rule:** Each of the 9 microservices has its own MySQL database. No service directly accesses
+another service's database. **Already the standing decision** in `02-domain/domain-map.md`
+(every bounded context's table row says "Database: MySQL (dedicated)").
 
 ```
 ✓ Correct:
-  Service A → Database A
-  Service B → Database B
+  billing-service    → billing_db
+  units-service      → units_db
 
 ✗ Incorrect:
-  Service A → Database B (direct JOIN)
+  billing-service → JOIN with units-service's tables
 ```
 
-**How do I share data then?** With APIs or events, never with direct SQL.
+**How does `billing-service` know a unit's type, then?** Via the `UnitRegistered` /
+`UnitUpdated` events (`02-domain/domain-events.md`) — never a direct SQL join.
 
 ---
 
 #### Saga (Distributed transactions)
 
-**Problem:** A business transaction spans multiple services and you cannot use a distributed ACID transaction.
+**Problem:** A business transaction spans multiple services and you cannot use a distributed
+ACID transaction.
 
-```
-Choreographed Saga (via events):
-
-  [Orders]                  [Inventory]            [Payments]
-     │ OrderCreated              │                     │
-     │ ─────────────────────▶   │                     │
-     │                     StockReserved              │
-     │ ◀─────────────────────   │                     │
-     │ OrderStockConfirmed                            │
-     │ ─────────────────────────────────────────▶    │
-     │                                          PaymentApproved
-     │ ◀─────────────────────────────────────────    │
-```
-
-**Compensations:** If a step fails, execute compensating transactions in reverse order.
-
-```
-Step 1: Reserve stock         → Compensation: Release stock
-Step 2: Debit payment         → Compensation: Refund
-Step 3: Confirm order         → Compensation: Cancel order
-```
+**Not currently needed:** resi-complex's cross-context flows in `02-domain/domain-events.md`
+are all **one-way reactive Policies** (e.g. "whenever `ExpenseProposalApproved` arrives, notify
+the Administrator"), not multi-step transactions requiring compensation. If a future feature
+needs a true multi-step distributed transaction (e.g. a v2 online-payment flow that must debit a
+fee and confirm a bank transaction together), re-evaluate this pattern then.
 
 ---
 
 #### CQRS (Command Query Responsibility Segregation)
 
 **Problem:** The logic for writing data is very different from the logic for reading it.
-A single model forces suboptimal compromises for both.
 
-```
-Write (Commands):                        Read (Queries):
-  POST /orders                             GET /orders?customerId=X
-       │                                         │
-       ▼                                         ▼
-  [Command Handler]                       [Query Handler]
-       │                                         │
-       ▼                                         ▼
-  [Aggregate]                            [Read Model / Projection]
-       │                                 (denormalized, optimized for reading)
-       ▼
-  [Event Store / Write DB]
-       │
-       ▼ (updates the read side via events)
-  [Read DB]
-```
-
-**When to use it:** When read volume is much higher than write volume, or when queries are very complex to perform on the write model.
-
-**Caution:** Increases complexity. Not always worth it.
+**Where it already applies, implicitly:** `reports-service` (FR19) is, by definition, a
+read-only projection built from other services' domain events (`02-domain/domain-map.md`:
+"Report: A read-only, aggregated view built from other contexts' events"). This is CQRS's read
+side without the team having to name it that way. **No other service needs CQRS** — their read
+and write models are not different enough to justify the added complexity.
 
 ---
 
 #### Outbox Pattern (Transactional)
 
-**Problem:** You need to guarantee that when you save to the database, you also publish the event — without risk of publishing it twice or not publishing it if there is a failure.
-
-```
-❌ Without Outbox (may lose events):
-  BEGIN TRANSACTION
-    INSERT INTO orders ...
-  COMMIT
-  // If the system crashes here, the event is lost
-  publishEvent(OrderCreated)
-
-✓ With Outbox (atomic):
-  BEGIN TRANSACTION
-    INSERT INTO orders ...
-    INSERT INTO outbox (event_type, payload, published) VALUES ('OrderCreated', '...', false)
-  COMMIT
-  // Separate process reads outbox and publishes
-  // If publishing fails, the outbox still has the event
-```
+**Problem:** You need to guarantee that when you save to the database, you also publish the
+event — without risk of publishing it twice or losing it on a crash.
 
 ```sql
--- Outbox table
+-- Outbox table, applicable to every service that publishes events
+-- (units, people, maintenance, billing, access-control, finance-approval)
 CREATE TABLE outbox (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_type  VARCHAR(100) NOT NULL,
   payload     JSONB NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT NOW(),
-  published_at TIMESTAMPTZ,
   published   BOOLEAN DEFAULT false
 );
-
--- Index for the Relay (process that publishes pending events)
-CREATE INDEX idx_outbox_unpublished ON outbox (created_at) WHERE published = false;
 ```
+
+**Directly required by resi-complex's own design:** `02-domain/domain-events.md`'s resilience
+section already commits to "at-least-once delivery + idempotent consumers" — the Outbox pattern
+is the standard way to guarantee the "at-least-once" half of that promise (publishing a
+`FeeGenerated` event can never be silently lost if `billing-service` crashes right after saving
+the fee). **Recommended, not yet implemented** — it should land together with whichever broker
+is chosen in AT-002.
 
 ---
 
 #### Event Sourcing
 
-**Problem:** You need full audit, reproducing system state at any point in time, or rebuilding projections.
-
-```
-Traditional:    DB stores current state → "An order is worth $150"
-Event Sourcing: DB stores events        → "OrderCreated($100) + DiscountApplied($-30) + ItemAdded($80)"
-
-To know the current state: you replay all events in order.
-```
-
-**When to use it:** Financial auditing, advanced debugging, systems where history matters.
-
-**When NOT to use it:** Most cases. It adds significant complexity. It is not the default solution.
+**Not adopted.** Financial auditing exists in resi-complex (`ExpenseProposal`'s append-only
+`Approval[]` history, FR18), but it is modeled as an explicit append-only child collection inside
+the aggregate — not as full Event Sourcing of the aggregate's entire state. Full Event Sourcing
+would add significant complexity with no corresponding requirement.
 
 ---
 
@@ -511,16 +416,11 @@ To know the current state: you replay all events in order.
 
 #### Sidecar Pattern
 
-**Problem:** You want to add observability, configuration, or network capabilities to a service without modifying its code.
+**Problem:** You want to add observability, configuration, or network capabilities to a service
+without modifying its code.
 
-```
-Kubernetes Pod:
-  ┌──────────────────────────────┐
-  │  [Service A]                │
-  │  [Sidecar: Envoy/Istio]    │  ← Handles TLS, metrics, service mesh
-  │  [Sidecar: Filebeat]       │  ← Collects logs
-  └──────────────────────────────┘
-```
+**Deferred with AT-003** (container orchestration platform undecided) — a sidecar (Envoy/Istio
+for service mesh, Filebeat for log shipping) only makes sense once the orchestrator is chosen.
 
 ---
 
@@ -528,37 +428,34 @@ Kubernetes Pod:
 
 | Pattern | Do not use it when... |
 |---------|----------------------|
-| CQRS | The read and write models are similar. It only adds complexity. |
-| Event Sourcing | You do not need complete history. It is hard to implement and maintain. |
-| Saga | The transaction fits in a single service. Use a simple ACID transaction. |
-| Circuit Breaker | The call is internal to the same service. The overhead is not worth it. |
-| BFF | Clients have similar needs. A standard API Gateway is sufficient. |
+| CQRS | The read and write models are similar — true for every resi-complex service except `reports-service` |
+| Event Sourcing | You do not need complete history — true for every aggregate except `ExpenseProposal`'s approval history, which is already modeled without full Event Sourcing |
+| Saga | The transaction fits in a single service — true for every current resi-complex flow; revisit only if v2 introduces real distributed transactions (e.g. payments) |
+| Circuit Breaker | The call is internal to the same service — never skip it once services actually call each other over the network |
+| BFF | Clients have similar needs — true for resi-complex (web-only, `01-context/scope.md`) |
 
 ---
 
 ## Patterns adopted in this project
 
-> **Fill in with your specific project's decisions.**
-> For each pattern: decide whether it is adopted, document the ADR that justifies the decision,
-> and link to the section in this document where you learned when to use it.
-
 | Pattern | Adopted? | Justification / ADR |
 |---------|---------|---------------------|
-| API Gateway | [Yes / No — see ADR-NNN] | [Brief reason] |
-| Database per Service | [Yes / No — see ADR-NNN] | [Brief reason] |
-| Circuit Breaker | [Yes / No — see ADR-NNN] | [Brief reason] |
-| Saga (choreographed) | [Yes / No — see ADR-NNN] | [Brief reason] |
-| Outbox Pattern | [Yes / No — see ADR-NNN] | [Brief reason] |
-| CQRS | [Yes / No — see ADR-NNN] | [Brief reason] |
-| Event Sourcing | [Yes / No — see ADR-NNN] | [Brief reason] |
-| BFF | [Yes / No — see ADR-NNN] | [Brief reason] |
+| API Gateway | **Pending — no ADR yet.** See `overview.md` AT-001. | Needed to centralize JWT validation, rate limiting, and CORS across 9 services instead of duplicating them in each |
+| Database per Service | **Yes — no dedicated ADR yet, but already the standing decision in `02-domain/domain-map.md`.** Candidate ADR-004. | Each of the 9 bounded contexts already owns its Ubiquitous Language and data; sharing a database would silently reintroduce coupling the domain model was explicitly split to avoid |
+| Circuit Breaker | **Deferred — no ADR.** See `overview.md` §6/§7. | Blocked on API Gateway (AT-001) and message broker (AT-002) existing first; premature to add resilience around calls that don't happen yet |
+| Saga (choreographed) | **No — not needed by current scope.** | Every cross-context flow in `02-domain/domain-events.md` is a one-way reactive Policy, not a multi-step transaction requiring compensation; reconsider only if a future distributed transaction (e.g. v2 payments) requires it |
+| Outbox Pattern | **Recommended, not yet implemented — no ADR.** Candidate to bundle with the message-broker ADR-005. | Directly required by `02-domain/domain-events.md`'s own "at-least-once delivery" commitment — without it, a crash between saving and publishing silently loses an event (e.g. a generated fee never notifies the resident) |
+| CQRS | **Partial / implicit — `reports-service` only. No ADR.** | `reports-service` is, by its own FR19 definition, a read-only event-built projection — the read side of CQRS without a full write-side split; no other service's read/write models diverge enough to justify it |
+| Event Sourcing | **No.** | `ExpenseProposal`'s append-only `Approval[]` history already satisfies FR18's traceability requirement without replaying the full aggregate from events |
+| BFF | **No.** | `01-context/scope.md` confirms web-only, no mobile app in this MVP — a single client has no need for a BFF split |
 
 ---
 
 ## Correlations
 
-- Hexagonal Architecture → `05-architecture/hexagonal-architecture.md`
-- ADR for pattern decisions → `05-architecture/decisions/`
-- Saga implementation → `09-microservices/services/XX/events.md`
-- Circuit Breaker runbook → `09-microservices/services/XX/runbook.md`
-- Outbox in the data model → `06-data/models.md`
+- Hexagonal Architecture (fully worked Java example) → `05-architecture/hexagonal-architecture.md`
+- ADR for pattern decisions → `05-architecture/decisions/` (candidates ADR-003 through ADR-006 — see `decisions/README.md`)
+- Domain events these patterns support → `02-domain/domain-events.md`
+- Architectural technical debt tracking the open decisions (AT-001, AT-002) → `05-architecture/overview.md` §8
+- Outbox table would live in → `06-data/models.md` (per service, once written)
+
