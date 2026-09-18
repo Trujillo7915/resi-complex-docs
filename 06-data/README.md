@@ -14,51 +14,55 @@ service, it requests it via API or receives it via event. This principle guarant
 
 ## What is here and how to fill it in
 
-### `models.md` ⭐
-Data models for each microservice.
-**Fill in:** ER (entity-relationship) diagram or description of collections/tables for each service.
+### `models.md` ⭐ — done
+Data models for each of the 9 microservices: tables, columns, constraints, indexes,
+migration strategy, and the cross-service ER diagram. Engine: MySQL 8 for all services
+(`01-context/scope.md`).
 
-**Format per service:**
+**Format per service** (as used in `models.md`):
 ```markdown
-## Service: [name]
-**DB Engine:** [PostgreSQL / MongoDB / Redis / etc.]
-**Justification:** [why this engine for this service]
+## Service: `service-name`
+**DB Engine:** MySQL 8 — [justification for this service]
 
-### Table/Collection: [name]
+### Table: `table_name`
 | Field | Type | Nullable | Description | Constraints |
 |-------|------|----------|-------------|-------------|
-| id | UUID | No | Unique identifier | PK |
+| id | CHAR(36) | No | Unique identifier (UUID) | PK |
 | [field] | [type] | [Yes/No] | [description] | [FK/Unique/etc.] |
-
-### Indexes
-| Name | Fields | Type | Justification |
-|------|--------|------|---------------|
 ```
 
-### `data-dictionary.md` ⭐
-Exact meaning of each important field in the system.
-**Fill in:** especially for fields that may be ambiguous or have business rules.
+### `data-dictionary.md` — merged into `models.md`
+The content this file would hold already exists: each table in `models.md` carries
+its own "Data dictionary" subsection with per-column business meaning. Split it out
+into its own file only if the column count grows large enough that cross-service lookup
+becomes painful.
 
-**Format:**
-```markdown
-| Field | Service | Table | Type | Detailed description | Possible values |
-|-------|---------|-------|------|---------------------|-----------------|
-| status | scheduling | schedule | ENUM | Current status of the schedule | ACTIVE, CANCELLED, PENDING |
-```
+### `modeling-conventions.md` — merged into `models.md`
+The content this file would hold already exists inline in `models.md` → "Data modeling
+principles" (naming: `snake_case`, UUIDs as `CHAR(36)`, soft delete via `deleted_at`,
+audit fields `created_at`/`updated_at`). Split out only if conventions start drifting
+between services.
 
-### `modeling-conventions.md`
-Naming and style conventions for the project's databases.
-**Fill in:** naming (snake_case or camelCase), use of UUIDs vs sequential, standard timestamps,
-soft delete vs hard delete, auditing (created_at, updated_at, created_by).
+### `normalization-assessment.md` — merged into `models.md`
+The one denormalization the project has today is already documented: `reports-service`'s
+projection tables (`requests_by_status_view`, `pending_fees_view`) are intentionally
+denormalized read models, justified inline in `models.md` → Service: `reports-service`.
+Split this out into its own file if more denormalizations are added later and need a
+dedicated record.
 
-### `normalization-assessment.md`
-Analysis of the normalization level and justification for denormalizations.
-**Fill in:** for each intentional denormalization, explain why (performance, simplification).
+### `migration-strategy.md` — merged into `models.md`
+The content this file would hold already exists inline in `models.md` → "Migration
+strategy" (tool: Flyway, per `_stacks/java-spring.md`; naming convention; compatible
+vs. incompatible change examples).
 
-### `migration-strategy.md`
-Strategy for migrating data between schema versions.
-**Fill in:** migration tool (Flyway, Liquibase, Alembic), rollback policy,
-how to handle migrations with data in production.
+---
+
+## Status
+
+| File | Status | Notes |
+|------|--------|-------|
+| `models.md` | Filled | 9 services, 15 tables, MySQL 8, ER diagram, Flyway migration strategy |
+| `data-dictionary.md`, `modeling-conventions.md`, `normalization-assessment.md`, `migration-strategy.md` | Merged into `models.md` | Content exists inline for this MVP scope (see above); split out into their own files if they outgrow it |
 
 ---
 
@@ -77,11 +81,12 @@ how to handle migrations with data in production.
 ## Important data decisions in microservices
 
 ### SQL or NoSQL?
-There is no single answer. It depends on the service:
-- **SQL** (PostgreSQL, MySQL): relational data, ACID transactions, fixed schema
-- **Document** (MongoDB): hierarchical data, flexible schema, high variability
-- **Key-value** (Redis): cache, sessions, high-speed temporary data
-- **Time series** (InfluxDB, TimescaleDB): metrics, event logs
+resi-complex uses **SQL (MySQL 8)** for all 9 services — every entity in
+`02-domain/entities-and-rules.md` has a fixed, well-known schema and needs ACID
+guarantees (e.g. a fee cannot be half-generated). No service in this MVP scope needs:
+- **Document** (MongoDB): no entity has a variable/nested shape
+- **Key-value** (Redis): sessions are stateless JWTs, not server-side state
+- **Time series** (InfluxDB, TimescaleDB): no telemetry/IoT entity in scope
 
 ### How to handle consistency between services?
 Without a shared database, consistency is **eventual**:
@@ -90,9 +95,9 @@ Without a shared database, consistency is **eventual**:
 
 ---
 
-## Questions this section must answer
+## Questions this section answers
 
-- What data does each microservice handle?
-- Why was that database engine chosen for each service?
-- How is the schema updated without breaking the system?
-- Who is the "owner" of each piece of data in the system?
+- **What data does each microservice handle?** → `models.md`, one `## Service:` section per microservice (15 tables total across the 9 services).
+- **Why was that database engine chosen for each service?** → MySQL 8 for all 9, per `01-context/scope.md`; see "SQL or NoSQL?" above for why the alternatives weren't needed.
+- **How is the schema updated without breaking the system?** → Flyway, versioned forward-only migrations; see `models.md` → "Migration strategy" for the compatible/incompatible change examples.
+- **Who is the "owner" of each piece of data in the system?** → the service whose section it lives under in `models.md`; every cross-service reference (e.g. `maintenance_requests.person_id`) is resolved via API/event, never a real SQL foreign key across databases.
